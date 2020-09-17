@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2017 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -81,8 +81,8 @@ namespace Simd
             red[0][0] = Average16(red[0][0], red[1][0]);
             red[0][1] = Average16(red[0][1], red[1][1]);
 
-            Store<align>((__m256i*)u, PackU16ToU8(BgrToU16(blue[0][0], green[0][0], red[0][0]), BgrToU16(blue[0][1], green[0][1], red[0][1])));
-            Store<align>((__m256i*)v, PackU16ToU8(BgrToV16(blue[0][0], green[0][0], red[0][0]), BgrToV16(blue[0][1], green[0][1], red[0][1])));
+            Store<align>((__m256i*)u, PackI16ToU8(BgrToU16(blue[0][0], green[0][0], red[0][0]), BgrToU16(blue[0][1], green[0][1], red[0][1])));
+            Store<align>((__m256i*)v, PackI16ToU8(BgrToV16(blue[0][0], green[0][0], red[0][0]), BgrToV16(blue[0][1], green[0][1], red[0][1])));
         }
 
         template <bool align> void BgrToYuv420p(const uint8_t * bgr, size_t width, size_t height, size_t bgrStride, uint8_t * y, size_t yStride,
@@ -149,8 +149,8 @@ namespace Simd
             Average16(red[0]);
             Average16(red[1]);
 
-            Store<align>((__m256i*)u, PackU16ToU8(BgrToU16(blue[0], green[0], red[0]), BgrToU16(blue[1], green[1], red[1])));
-            Store<align>((__m256i*)v, PackU16ToU8(BgrToV16(blue[0], green[0], red[0]), BgrToV16(blue[1], green[1], red[1])));
+            Store<align>((__m256i*)u, PackI16ToU8(BgrToU16(blue[0], green[0], red[0]), BgrToU16(blue[1], green[1], red[1])));
+            Store<align>((__m256i*)v, PackI16ToU8(BgrToV16(blue[0], green[0], red[0]), BgrToV16(blue[1], green[1], red[1])));
         }
 
         template <bool align> void BgrToYuv422p(const uint8_t * bgr, size_t width, size_t height, size_t bgrStride, uint8_t * y, size_t yStride,

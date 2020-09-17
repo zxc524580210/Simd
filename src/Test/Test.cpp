@@ -1,8 +1,9 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar,
-*               2014-2017 Antonenka Mikhail.
+* Copyright (c) 2011-2020 Yermalayeu Ihar,
+*               2014-2017 Antonenka Mikhail,
+*               2019-2019 Facundo Galan.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -72,6 +73,8 @@ namespace Test
     bool name##AddToList(){ g_groups.push_back(Group(#name, name##AutoTest, name##DataTest, name##SpecialTest)); return true; } \
     bool name##AtList = name##AddToList();
 
+    TEST_ADD_GROUP_AD0(AbsDifference);
+
     TEST_ADD_GROUP_AD0(AbsDifferenceSum);
     TEST_ADD_GROUP_AD0(AbsDifferenceSumMasked);
     TEST_ADD_GROUP_AD0(AbsDifferenceSums3x3);
@@ -86,17 +89,21 @@ namespace Test
 
     TEST_ADD_GROUP_AD0(BgraToBgr);
     TEST_ADD_GROUP_AD0(BgraToGray);
+    TEST_ADD_GROUP_A00(BgraToRgb);
     TEST_ADD_GROUP_AD0(BgrToGray);
     TEST_ADD_GROUP_AD0(BgrToHsl);
     TEST_ADD_GROUP_AD0(BgrToHsv);
+    TEST_ADD_GROUP_A00(BgrToRgb);
     TEST_ADD_GROUP_AD0(GrayToBgr);
     TEST_ADD_GROUP_AD0(Int16ToGray);
+    TEST_ADD_GROUP_A00(RgbToGray);
 
     TEST_ADD_GROUP_AD0(BgraToBayer);
     TEST_ADD_GROUP_AD0(BgrToBayer);
 
     TEST_ADD_GROUP_AD0(BgrToBgra);
     TEST_ADD_GROUP_AD0(GrayToBgra);
+    TEST_ADD_GROUP_A00(RgbToBgra);
 
     TEST_ADD_GROUP_AD0(BgraToYuv420p);
     TEST_ADD_GROUP_AD0(BgraToYuv422p);
@@ -137,8 +144,6 @@ namespace Test
 
     TEST_ADD_GROUP_AD0(Copy);
     TEST_ADD_GROUP_AD0(CopyFrame);
-
-    TEST_ADD_GROUP_A00(ConvolutionForward);
 
     TEST_ADD_GROUP_AD0(Crc32c);
 
@@ -185,6 +190,7 @@ namespace Test
     TEST_ADD_GROUP_AD0(Float16ToFloat32);
     TEST_ADD_GROUP_AD0(SquaredDifferenceSum16f);
     TEST_ADD_GROUP_AD0(CosineDistance16f);
+    TEST_ADD_GROUP_A00(CosineDistancesMxNa16f);
 
     TEST_ADD_GROUP_AD0(Float32ToUint8);
     TEST_ADD_GROUP_AD0(Uint8ToFloat32);
@@ -248,14 +254,11 @@ namespace Test
     TEST_ADD_GROUP_AD0(NeuralAddVectorMultipliedByValue);
     TEST_ADD_GROUP_AD0(NeuralAddVector);
     TEST_ADD_GROUP_AD0(NeuralAddValue);
-    TEST_ADD_GROUP_AD0(NeuralSigmoid);
     TEST_ADD_GROUP_AD0(NeuralRoughSigmoid);
     TEST_ADD_GROUP_AD0(NeuralRoughSigmoid2);
     TEST_ADD_GROUP_AD0(NeuralDerivativeSigmoid);
-    TEST_ADD_GROUP_AD0(NeuralTanh);
     TEST_ADD_GROUP_AD0(NeuralRoughTanh);
     TEST_ADD_GROUP_AD0(NeuralDerivativeTanh);
-    TEST_ADD_GROUP_AD0(NeuralRelu);
     TEST_ADD_GROUP_AD0(NeuralDerivativeRelu);
     TEST_ADD_GROUP_AD0(NeuralPow);
     TEST_ADD_GROUP_AD0(NeuralUpdateWeights);
@@ -307,6 +310,7 @@ namespace Test
 
     TEST_ADD_GROUP_AD0(GetStatistic);
     TEST_ADD_GROUP_AD0(GetMoments);
+    TEST_ADD_GROUP_A00(GetObjectMoments);
     TEST_ADD_GROUP_AD0(GetRowSums);
     TEST_ADD_GROUP_AD0(GetColSums);
     TEST_ADD_GROUP_AD0(GetAbsDyRowSums);
@@ -323,20 +327,52 @@ namespace Test
 
     TEST_ADD_GROUP_AD0(SvmSumLinear);
 
-    TEST_ADD_GROUP_AD0(SynetAddBias);
+    TEST_ADD_GROUP_A00(SynetAddBias);
+    TEST_ADD_GROUP_A00(SynetAdd8i);
     TEST_ADD_GROUP_AD0(SynetEltwiseLayerForward);
+    TEST_ADD_GROUP_A00(SynetInnerProductLayerForward);
+    TEST_ADD_GROUP_A00(SynetInnerProduct8i);
+    TEST_ADD_GROUP_A00(SynetLrnLayerCrossChannels);
+    TEST_ADD_GROUP_A00(SynetShuffleLayerForward);
+    TEST_ADD_GROUP_A00(SynetSoftmaxLayerForward);
+    TEST_ADD_GROUP_A00(SynetUnaryOperation32fLayerForward);
+
+    TEST_ADD_GROUP_A00(SynetElu32f);
+    TEST_ADD_GROUP_A00(SynetHswish32f);
+    TEST_ADD_GROUP_A00(SynetPreluLayerForward);
+    TEST_ADD_GROUP_A00(SynetRelu32f);
+    TEST_ADD_GROUP_A00(SynetRestrictRange32f);
+    TEST_ADD_GROUP_A00(SynetSigmoid32f);
+    TEST_ADD_GROUP_A00(SynetSoftplus32f);
+    TEST_ADD_GROUP_A00(SynetTanh32f);
+
+    TEST_ADD_GROUP_A00(SynetConvert32fTo8u);
+    TEST_ADD_GROUP_A00(SynetSetInput);
+    TEST_ADD_GROUP_A00(SynetReorderImage);
+    TEST_ADD_GROUP_A00(SynetReorderFilter);
+
+    TEST_ADD_GROUP_A00(SynetConvolution8iForward);
+
+    TEST_ADD_GROUP_A00(SynetConvolution32fForward);
+
+    TEST_ADD_GROUP_A00(SynetDeconvolution32fForward);
+
     TEST_ADD_GROUP_A00(SynetFusedLayerForward0);
     TEST_ADD_GROUP_A00(SynetFusedLayerForward1);
     TEST_ADD_GROUP_A00(SynetFusedLayerForward2);
     TEST_ADD_GROUP_A00(SynetFusedLayerForward3);
     TEST_ADD_GROUP_A00(SynetFusedLayerForward4);
-    TEST_ADD_GROUP_A00(SynetInnerProductLayerForward);
-    TEST_ADD_GROUP_AD0(SynetLrnLayerCrossChannels);
-    TEST_ADD_GROUP_A00(SynetPoolingForwardMax);
-    TEST_ADD_GROUP_A00(SynetPreluLayerForward);
-    TEST_ADD_GROUP_A00(SynetRestrictRange);
-    TEST_ADD_GROUP_AD0(SynetScaleLayerForward);
-    TEST_ADD_GROUP_A00(SynetSoftmaxLayerForward);
+    TEST_ADD_GROUP_A00(SynetFusedLayerForward8);
+    TEST_ADD_GROUP_A00(SynetFusedLayerForward9);
+
+    TEST_ADD_GROUP_A00(SynetMergedConvolution32fForward);
+
+    TEST_ADD_GROUP_A00(SynetPoolingForwardAverage);
+    TEST_ADD_GROUP_A00(SynetPoolingForwardMax32f);
+    TEST_ADD_GROUP_A00(SynetPoolingForwardMax8u);
+
+    TEST_ADD_GROUP_A00(SynetScaleLayerForward);
+    TEST_ADD_GROUP_A00(SynetScale8iForward);
 
     TEST_ADD_GROUP_AD0(TextureBoostedSaturatedGradient);
     TEST_ADD_GROUP_AD0(TextureBoostedUv);
@@ -345,12 +381,35 @@ namespace Test
 
     TEST_ADD_GROUP_A00(TransformImage);
 
-    TEST_ADD_GROUP_A00(Winograd2x3SetFilter);
-    TEST_ADD_GROUP_A00(Winograd2x3SetInput);
-    TEST_ADD_GROUP_A00(Winograd2x3SetOutput);
-    TEST_ADD_GROUP_A00(Winograd4x3SetFilter);
-    TEST_ADD_GROUP_A00(Winograd4x3SetInput);
-    TEST_ADD_GROUP_A00(Winograd4x3SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel1x3Block1x4SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel1x3Block1x4SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel1x3Block1x4SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel1x5Block1x4SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel1x5Block1x4SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel1x5Block1x4SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel2x2Block2x2SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel2x2Block2x2SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel2x2Block2x2SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel2x2Block4x4SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel2x2Block4x4SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel2x2Block4x4SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block2x2SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block2x2SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block2x2SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block3x3SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block3x3SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block3x3SetOutput);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block4x4SetFilter);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block4x4SetInput);
+    TEST_ADD_GROUP_A00(WinogradKernel3x3Block4x4SetOutput);
+
+    TEST_ADD_GROUP_00S(WinogradKernel1x3Block1x4);
+    TEST_ADD_GROUP_00S(WinogradKernel1x5Block1x4);
+    TEST_ADD_GROUP_00S(WinogradKernel2x2Block2x2);
+    TEST_ADD_GROUP_00S(WinogradKernel2x2Block4x4);
+    TEST_ADD_GROUP_00S(WinogradKernel3x3Block2x2);
+    TEST_ADD_GROUP_00S(WinogradKernel3x3Block3x3);
+    TEST_ADD_GROUP_00S(WinogradKernel3x3Block4x4);
 
     TEST_ADD_GROUP_AD0(Yuv444pToBgr);
     TEST_ADD_GROUP_AD0(Yuv422pToBgr);
@@ -359,6 +418,9 @@ namespace Test
     TEST_ADD_GROUP_AD0(Yuv444pToHsv);
     TEST_ADD_GROUP_AD0(Yuv444pToHue);
     TEST_ADD_GROUP_AD0(Yuv420pToHue);
+    TEST_ADD_GROUP_A00(Yuv444pToRgb);
+    TEST_ADD_GROUP_A00(Yuv422pToRgb);
+    TEST_ADD_GROUP_A00(Yuv420pToRgb);
 
     TEST_ADD_GROUP_A00(Yuva420pToBgra);
     TEST_ADD_GROUP_AD0(Yuv444pToBgra);
@@ -500,13 +562,17 @@ namespace Test
                 {
                     SOURCE = arg.substr(3, arg.size() - 3);
                 }
-                else if (arg.find("-w=") == 0)
+                else if (arg.find("-c=") == 0)
                 {
-                    W = FromString<int>(arg.substr(3, arg.size() - 3));
+                    C = FromString<int>(arg.substr(3, arg.size() - 3));
                 }
                 else if (arg.find("-h=") == 0)
                 {
                     H = FromString<int>(arg.substr(3, arg.size() - 3));
+                }                
+                else if (arg.find("-w=") == 0)
+                {
+                    W = FromString<int>(arg.substr(3, arg.size() - 3));
                 }
                 else if (arg.find("-pa=") == 0)
                 {
@@ -515,6 +581,10 @@ namespace Test
                 else if (arg.find("-wt=") == 0)
                 {
                     workThreads = FromString<size_t>(arg.substr(4, arg.size() - 4));
+                }
+                else if (arg.find("-mt=") == 0)
+                {
+                    MINIMAL_TEST_EXECUTION_TIME = FromString<int>(arg.substr(4, arg.size() - 4))*0.001;
                 }
                 else
                 {
@@ -570,7 +640,7 @@ namespace Test
                 for (size_t i = 0; i < tasks.size(); ++i)
                     progress += tasks[i]->Progress();
                 progress /= double(tasks.size());
-                std::cout << "\rTest progress: " << std::fixed << std::setprecision(1) << progress*100.0 << "%";
+                std::cout << "\rTest progress: " << std::fixed << std::setprecision(1) << progress*100.0 << "%" << std::flush;
                 Test::Sleep(40);
             } while (progress < 1.0 && !Test::Task::s_stopped);
             std::cout << std::endl << std::endl;
@@ -589,7 +659,7 @@ namespace Test
         TEST_LOG_SS(Info, "ALL TESTS ARE FINISHED SUCCESSFULLY!" << std::endl);
 
 #ifdef TEST_PERFORMANCE_TEST_ENABLE
-        TEST_LOG_SS(Info, Test::PerformanceMeasurerStorage::s_storage.TextReport(options.printAlign, false));
+        TEST_LOG_SS(Info, Test::PerformanceMeasurerStorage::s_storage.TextReport(options.printAlign, false) << SimdPerformanceStatistic());
         if (!options.html.empty())
             Test::PerformanceMeasurerStorage::s_storage.HtmlReport(options.html, options.printAlign);
 #endif
@@ -662,12 +732,14 @@ namespace Test
         std::cout << "    -help or -?   to print this help message." << std::endl << std::endl;
         std::cout << "    -r=../..      to set project root directory." << std::endl << std::endl;
         std::cout << "    -pa=1         to print alignment statistics." << std::endl << std::endl;
-        std::cout << "    -w=1920       width of test image for performance testing." << std::endl << std::endl;
-        std::cout << "    -h=1080       height of test image for performance testing." << std::endl << std::endl;
+        std::cout << "    -c=512        a number of channels in test image for performance testing." << std::endl << std::endl;
+        std::cout << "    -h=1080       a height of test image for performance testing." << std::endl << std::endl;
+        std::cout << "    -w=1920       a width of test image for performance testing." << std::endl << std::endl;
         std::cout << "    -oh=log.html  a file name with test report (in HTML format)." << std::endl << std::endl;
         std::cout << "    -s=sample.avi a video source (Simd::Motion test)." << std::endl << std::endl;
         std::cout << "    -wt=1         a thread number used to parallelize algorithms." << std::endl << std::endl;
         std::cout << "    -fe=Abs       an exclude filter to exclude some tests." << std::endl << std::endl;
+        std::cout << "    -mt=100       a minimal test execution time (in milliseconds)." << std::endl << std::endl;
         return 0;
     }
 
@@ -675,12 +747,15 @@ namespace Test
     String SOURCE = "";
 
 #ifdef TEST_PERFORMANCE_TEST_ENABLE
-    int W = 1920;
+    int C = 512;
     int H = 1080;
+    int W = 1920;
 #else
-    int W = 128;
+    int C = 32;
     int H = 96;
+    int W = 128;
 #endif
+    double MINIMAL_TEST_EXECUTION_TIME = 0.1;
 
     void CheckCpp();
 }

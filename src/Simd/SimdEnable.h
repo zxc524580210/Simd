@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -94,10 +94,14 @@ namespace Simd
             // Ebx:
             AVX2 = 1 << 5,
             AVX512F = 1 << 16,
+            AVX512DQ = 1 << 17,
+            AVX512CD = 1 << 28,
             AVX512BW = 1 << 30,
+            AVX512VL = 1 << 31,
 
             // Ecx:
             AVX512VBMI = 1 << 1,
+            AVX512VNNI = 1 << 11,
         };
 
         SIMD_INLINE bool CheckBit(Level level, Register index, Bit bit)
@@ -174,21 +178,6 @@ namespace Simd
         }
 
         const bool Enable = SupportedByCPU() && SupportedByOS();
-
-        const unsigned int SCR_FTZ = 1 << 15;
-
-        SIMD_INLINE SimdBool GetFlushToZero()
-        {
-            return _mm_getcsr() & SCR_FTZ ? SimdTrue : SimdFalse;
-        }
-
-        SIMD_INLINE void SetFlushToZero(SimdBool value)
-        {
-            if (value)
-                _mm_setcsr(_mm_getcsr() | SCR_FTZ);
-            else
-                _mm_setcsr(_mm_getcsr() & ~SCR_FTZ);
-        }
     }
 #endif
 
@@ -407,7 +396,8 @@ namespace Simd
         SIMD_INLINE bool SupportedByCPU()
         {
             return
-                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512F);
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512F) && 
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512CD);
         }
 
         SIMD_INLINE bool SupportedByOS()
@@ -415,7 +405,7 @@ namespace Simd
 #if defined(_MSC_VER)
             __try
             {
-                __m512d value = _mm512_set1_pd(1.0);// try to execute of AVX-512-F instructions;
+                __m512d value = _mm512_set1_pd(1.0);// try to execute of AVX-512F instructions;
                 return true;
             }
             __except (EXCEPTION_EXECUTE_HANDLER)
@@ -438,7 +428,10 @@ namespace Simd
         {
             return
                 Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512F) &&
-                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512BW);
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512CD) &&
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512DQ) &&
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512BW) &&
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ebx, Cpuid::AVX512VL);
         }
 
         SIMD_INLINE bool SupportedByOS()
@@ -446,7 +439,37 @@ namespace Simd
 #if defined(_MSC_VER)
             __try
             {
-                __m512i value = _mm512_abs_epi8(_mm512_set1_epi8(1));// try to execute of AVX-512-BW instructions;
+                __m512i value = _mm512_abs_epi8(_mm512_set1_epi8(1));// try to execute of AVX-512BW instructions;
+                return true;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                return false;
+            }
+#else
+            return true;
+#endif
+        }
+
+        const bool Enable = SupportedByCPU() && SupportedByOS();
+    }
+#endif
+
+#ifdef SIMD_AVX512VNNI_ENABLE
+    namespace Avx512vnni
+    {
+        SIMD_INLINE bool SupportedByCPU()
+        {
+            return
+                Cpuid::CheckBit(Cpuid::Extended, Cpuid::Ecx, Cpuid::AVX512VNNI);
+        }
+
+        SIMD_INLINE bool SupportedByOS()
+        {
+#if defined(_MSC_VER)
+            __try
+            {
+                __m512i value = _mm512_dpbusd_epi32(_mm512_setzero_si512(), _mm512_set1_epi8(1), _mm512_set1_epi8(1));// try to execute of AVX-512VNNI instructions;
                 return true;
             }
             __except (EXCEPTION_EXECUTE_HANDLER)
@@ -520,34 +543,6 @@ namespace Simd
         }
 
         const bool Enable = SupportedByCPU() && SupportedByOS();
-
-        const unsigned int FPSCR_FTZ = 1 << 24;
-
-        SIMD_INLINE SimdBool GetFlushToZero()
-        {
-#if defined(__GNUC__)
-            unsigned int fpscr;
-            __asm__ volatile("vmrs %0, fpscr " : "=r" (fpscr));
-            return fpscr & FPSCR_FTZ ? SimdTrue : SimdFalse;
-#else
-            return SimdFalse;
-#endif
-        }
-
-        SIMD_INLINE void SetFlushToZero(SimdBool value)
-        {
-#if defined(__GNUC__)
-            unsigned int fpscr;
-            if (value)
-                __asm__ volatile("vmrs r0, fpscr\n"
-                    "orr r0, $(1 << 24)\n"
-                    "vmsr fpscr, r0" : : : "r0");
-            else
-                __asm__ volatile("vmrs r0, fpscr\n"
-                    "bic r0, $(1 << 24)\n"
-                    "vmsr fpscr, r0" : : : "r0");
-#endif
-        }
     }
 #endif
 
@@ -570,6 +565,11 @@ namespace Simd
 
     SIMD_INLINE size_t Alignment()
     {
+#ifdef SIMD_AVX512VNNI_ENABLE
+        if (Avx512vnni::Enable)
+            return sizeof(__m512i);
+        else
+#endif
 #ifdef SIMD_AVX512BW_ENABLE
         if (Avx512bw::Enable)
             return sizeof(__m512i);
@@ -696,6 +696,12 @@ namespace Simd
 #define SIMD_AVX512BW_FUNC(func) Simd::Avx512bw::Enable ? Simd::Avx512bw::func : 
 #else
 #define SIMD_AVX512BW_FUNC(func)
+#endif
+
+#ifdef SIMD_AVX512VNNI_ENABLE
+#define SIMD_AVX512VNNI_FUNC(func) Simd::Avx512vnni::Enable ? Simd::Avx512vnni::func : 
+#else
+#define SIMD_AVX512VNNI_FUNC(func)
 #endif
 
 #ifdef SIMD_VMX_ENABLE

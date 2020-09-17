@@ -1,7 +1,7 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -22,20 +22,105 @@
 * SOFTWARE.
 */
 #include "Test/TestUtils.h"
+#include "Test/TestTensor.h"
+#include "Simd/SimdDrawing.hpp"
+#include "Simd/SimdFont.hpp"
+#include "Simd/SimdSynet.h"
+
+#ifdef WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <filesystem>
+#endif
+
+#ifdef __linux__
+#include <unistd.h>
+#include <dirent.h>
+#endif
 
 namespace Test
 {
-    uint8_t g_rand[UINT16_MAX];
-    bool InitRand()
+    void FillSequence(View & view)
+    {
+        for (size_t i = 0, n = view.DataSize(); i < n; ++i)
+            view.data[i] = uint8_t(i);
+    }
+
+    template <size_t N> struct Color
+    {
+        uint8_t val[N];
+
+        Color(uint8_t v = 0)
+        {
+            for (size_t i = 0; i < N; ++i)
+                val[i] = v;
+        }
+    };
+
+    template <size_t N> Color<N> RandomColor(uint8_t lo = 0, uint8_t hi = 255)
+    {
+        Color<N> color;
+        for (size_t i = 0; i < N; ++i)
+            color.val[i] = lo + Random(hi - lo + 1);
+        return color;
+    }
+
+    template<size_t N> void FillPicture(View & view, uint64_t flag)
+    {
+        typedef Test::Color<N> Color;
+        if (flag & 1)
+        {
+            Simd::Fill(view, 15);
+        }
+        if (flag & 2)
+        {
+            size_t d = view.height / 20;
+            Rect rect(d, d, view.width - d, view.height - d);
+            Simd::DrawRectangle(view, rect, RandomColor<N>(), d/2);
+        }
+        if (flag & 4)
+        {
+            size_t size = Simd::Min<size_t>(view.height / 2, 256);
+            Simd::Font font(size);
+            font.Draw(view, "A1", View::MiddleCenter, RandomColor<N>(128, 255));
+        }
+    }
+
+    void FillPicture(View & view, uint64_t flag)
+    {
+        switch (view.PixelSize())
+        {
+        case 1: FillPicture<1>(view, flag); break;
+        case 2: FillPicture<2>(view, flag); break;
+        case 3: FillPicture<3>(view, flag); break;
+        case 4: FillPicture<4>(view, flag); break;
+        }
+    }
+
+    uint8_t g_rand8u[UINT16_MAX];
+    bool InitRand8u()
     {
         for (size_t i = 0, n = UINT16_MAX; i < n; ++i)
-            g_rand[i] = ::rand();
+            g_rand8u[i] = ::rand();
         return true;
     }
-    bool g_inited = InitRand();
-    SIMD_INLINE const uint8_t * Rand()
+    bool g_rand8u_inited = InitRand8u();
+    SIMD_INLINE const uint8_t * Rand8u()
     {
-        return g_rand + (::rand()&INT16_MAX);
+        return g_rand8u + (::rand()&INT16_MAX);
+    }
+
+    int16_t g_rand16i[UINT16_MAX];
+    bool InitRand16i()
+    {
+        for (size_t i = 0, n = UINT16_MAX; i < n; ++i)
+            g_rand16i[i] = (::rand() & INT16_MAX);
+        return true;
+    }
+    bool g_rand16i_inited = InitRand16i();
+    SIMD_INLINE const int16_t* Rand16i()
+    {
+        return g_rand16i + (::rand() & INT16_MAX);
     }
 
     void FillRandom(View & view, uint8_t lo, uint8_t hi)
@@ -50,7 +135,7 @@ namespace Test
             if (fast)
             {
                 for (size_t col = 0; col < width; col += INT16_MAX)
-                    memcpy(view.data + offset + col, Rand(), std::min<size_t>(INT16_MAX, width - col));
+                    memcpy(view.data + offset + col, Rand8u(), std::min<size_t>(INT16_MAX, width - col));
             }
             else
             {
@@ -125,7 +210,7 @@ namespace Test
         for (size_t row = 0; row < view.height; ++row)
         {
             ptrdiff_t offset = row*view.stride;
-            const uint8_t * rand = Rand();
+            const uint8_t * rand = Rand8u();
             for (size_t col = 0; col < width; ++col, ++offset)
                 view.data[offset] = (rand[col] & 1) ? index : 0;
         }
@@ -140,11 +225,11 @@ namespace Test
         Point c = rect.Center();
         for (ptrdiff_t row = rect.top; row < rect.bottom; ++row)
         {
-            ptrdiff_t indent = std::abs(row - c.y)*rect.Width() / rect.Height();
+            ptrdiff_t indent = Simd::Abs(row - c.y)*rect.Width() / rect.Height();
             ptrdiff_t left = rect.left + indent;
             ptrdiff_t right = rect.right - indent;
             ptrdiff_t offset = row*mask.stride + left;
-            const uint8_t * rand = Rand();
+            const uint8_t * rand = Rand8u();
             for (ptrdiff_t col = left; col < right; ++col, ++offset)
                 mask.data[offset] = (rand[col] & 1) ? index : 0;
         }
@@ -155,7 +240,7 @@ namespace Test
         assert(view.format == View::Float);
 
         bool fast = view.Area() > 100000;
-        float boost = (hi - lo) / 255;
+        float boost = (hi - lo) / UCHAR_MAX;
         for (size_t row = 0; row < view.height; ++row)
         {
             if (fast)
@@ -164,7 +249,7 @@ namespace Test
                 {
                     size_t size = std::min<size_t>(INT16_MAX, view.width - col);
                     float * dst = & view.At<float>(col, row);
-                    const uint8_t * src = Rand();
+                    const uint8_t * src = Rand8u();
                     for (size_t i = 0; i < size; ++i)
                         dst[i] = lo + boost*src[i];
                 }
@@ -180,13 +265,13 @@ namespace Test
     void FillRandom(float * data, size_t size, float lo, float hi)
     {
         bool fast = size > 100000;
-        float boost = (hi - lo) / 255;
+        float boost = (hi - lo) / SHRT_MAX;
         if (fast)
         {
             for (size_t i = 0; i < size; i += INT16_MAX)
             {
                 size_t n = std::min<size_t>(INT16_MAX, size - i);
-                const uint8_t * src = Rand();
+                const int16_t * src = Rand16i();
                 for (size_t j = 0; j < n; ++j)
                     data[i + j] = lo + boost * src[j];
             }
@@ -203,6 +288,233 @@ namespace Test
         FillRandom(buffer.data(), buffer.size(), lo, hi);
     }
 
+    void FillRandom(Tensor32f & tensor, float lo, float hi)
+    {
+        FillRandom(tensor.Data(), tensor.Size(), lo, hi);
+    }
+
+    void FillRandom(uint8_t* data, size_t size, uint8_t lo, uint8_t hi)
+    {
+        bool fast = (lo == 0) && (hi == 255);
+        if (fast)
+        {
+            for (size_t i = 0; i < size; i += INT16_MAX)
+                memcpy(data + i, Rand8u(), std::min<size_t>(INT16_MAX, size - i));
+        }
+        else
+        {
+            for (size_t i = 0; i < size; ++i)
+                data[i] = lo + Random(hi - lo + 1);
+        }
+    }
+
+    void FillRandom(Tensor8u & tensor, uint8_t lo, uint8_t hi)
+    {
+        FillRandom(tensor.Data(), tensor.Size(), lo, hi);
+    }
+
+    void FillRandom(Tensor8i& tensor, int8_t lo, int8_t hi)
+    {
+        for (size_t i = 0; i < tensor.Size(); ++i)
+            tensor.Data()[i] = lo + Random(hi - lo + 1);
+    }
+
+    void FillRandom(Tensor32i& tensor, int32_t lo, int32_t hi)
+    {
+        for (size_t i = 0; i < tensor.Size(); ++i)
+            tensor.Data()[i] = lo + Random(hi - lo + 1);
+    }
+
+    //-------------------------------------------------------------------------
+
+    void FillRandom(Tensor32f & tensor, float* min, float* max, size_t channels, int negative, float upper, float range)
+    {
+        const float lower = negative ? -upper : 0.0f;
+        Buffer32f buf(channels * 2);
+        FillRandom(buf, lower + range, upper - range);
+        for (size_t i = 0; i < channels; ++i)
+        {
+            min[i] = negative ? std::min(buf[i * 2 + 0], buf[i * 2 + 1]) - range : 0;
+            max[i] = std::max(buf[i * 2 + 0], buf[i * 2 + 1]) + range;
+        }
+        FillRandom(tensor, 0.0f, 1.0f);
+        if (tensor.Count() == 4)
+        {
+            for (size_t b = 0; b < tensor.Axis(0); ++b)
+            {
+                if (tensor.Format() == SimdTensorFormatNhwc)
+                {
+                    for (size_t y = 0; y < tensor.Axis(1); ++y)
+                        for (size_t x = 0; x < tensor.Axis(2); ++x)
+                            for (size_t c = 0; c < tensor.Axis(3); ++c)
+                                tensor.Data({ b, y, x, c })[0] = min[c] + tensor.Data({ b, y, x, c })[0] * (max[c] - min[c]);
+                }
+                else
+                {
+                    for (size_t c = 0; c < tensor.Axis(1); ++c)
+                        for (size_t y = 0; y < tensor.Axis(2); ++y)
+                            for (size_t x = 0; x < tensor.Axis(3); ++x)
+                                tensor.Data({ b, c, y, x })[0] = min[c] + tensor.Data({ b, c, y, x })[0] * (max[c] - min[c]);
+                }
+            }
+        }
+        else if (tensor.Count() == 3)
+        {
+            for (size_t b = 0; b < tensor.Axis(0); ++b)
+            {
+                if (tensor.Format() == SimdTensorFormatNhwc)
+                {
+                    for (size_t s = 0; s < tensor.Axis(1); ++s)
+                        for (size_t c = 0; c < tensor.Axis(2); ++c)
+                            tensor.Data({ b, s, c })[0] = min[c] + tensor.Data({ b, s, c })[0] * (max[c] - min[c]);
+                }
+                else
+                {
+                    for (size_t c = 0; c < tensor.Axis(1); ++c)
+                        for (size_t s = 0; s < tensor.Axis(2); ++s)
+                            tensor.Data({ b, c, s })[0] = min[c] + tensor.Data({ b, c, s })[0] * (max[c] - min[c]);
+                }
+            }
+        }
+        else
+            assert(0);
+    }
+
+    void SetSrc32fTo8u(const Tensor32f& src, const float* min, const float* max, size_t channels, int negative, SimdSynetCompatibilityType compatibility, float* shift, float* scale, Tensor8u& dst)
+    {
+        assert(src.Shape() == dst.Shape() && src.Format() == dst.Format());
+        int uMin = Simd::Base::Narrowed(compatibility) ? Simd::Base::U8_NARROWED_MIN : Simd::Base::U8_PRECISE_MIN;
+        int uMax = Simd::Base::Narrowed(compatibility) ? Simd::Base::U8_NARROWED_MAX : Simd::Base::U8_PRECISE_MAX;
+        int iMin = Simd::Base::Narrowed(compatibility) ? Simd::Base::I8_NARROWED_MIN : Simd::Base::I8_PRECISE_MIN;
+        int iMax = Simd::Base::Narrowed(compatibility) ? Simd::Base::I8_NARROWED_MAX : Simd::Base::I8_PRECISE_MAX;
+        Tensor32f buffer;
+        if (scale == NULL && shift == NULL)
+        {
+            buffer.Reshape(Shp(2, channels));
+            scale = buffer.Data(Shp(0, 0));
+            shift = buffer.Data(Shp(1, 0));
+        }
+        for (size_t i = 0; i < channels; ++i)
+        {
+            float abs = std::max(Simd::Abs(min[i]), Simd::Abs(max[i]));
+            scale[i] = (negative ? iMax : uMax) / abs;
+            shift[i] = float(negative ? -iMin : uMin);
+        }
+        if (src.Count() == 4)
+        {
+            for (size_t b = 0; b < src.Axis(0); ++b)
+            {
+                if (src.Format() == SimdTensorFormatNhwc)
+                {
+                    for (size_t y = 0; y < src.Axis(1); ++y)
+                        for (size_t x = 0; x < src.Axis(2); ++x)
+                            for (size_t c = 0; c < src.Axis(3); ++c)
+                                dst.Data({ b, y, x, c })[0] = Simd::Base::SynetConvert32fTo8u(src.Data({ b, y, x, c })[0], scale[c], shift[c], uMin, uMax);
+                }
+                else
+                {
+                    for (size_t c = 0; c < src.Axis(1); ++c)
+                        for (size_t y = 0; y < src.Axis(2); ++y)
+                            for (size_t x = 0; x < src.Axis(3); ++x)
+                                dst.Data({ b, c, y, x })[0] = Simd::Base::SynetConvert32fTo8u(src.Data({ b, c, y, x })[0], scale[c], shift[c], uMin, uMax);
+                }
+            }
+        }
+        else if (src.Count() == 3)
+        {
+            for (size_t b = 0; b < src.Axis(0); ++b)
+            {
+                if (src.Format() == SimdTensorFormatNhwc)
+                {
+                    for (size_t s = 0; s < src.Axis(1); ++s)
+                        for (size_t c = 0; c < src.Axis(2); ++c)
+                            dst.Data({ b, s, c })[0] = Simd::Base::SynetConvert32fTo8u(src.Data({ b, s, c })[0], scale[c], shift[c], uMin, uMax);
+                }
+                else
+                {
+                    for (size_t c = 0; c < src.Axis(1); ++c)
+                        for (size_t s = 0; s < src.Axis(2); ++s)
+                            dst.Data({ b, c, s })[0] = Simd::Base::SynetConvert32fTo8u(src.Data({ b, c, s })[0], scale[c], shift[c], uMin, uMax);
+                }
+            }
+        }
+        else
+            assert(0);
+    }
+
+    void SetDstStat(size_t channels, int negative, SimdSynetCompatibilityType compatibility, const Tensor32f& dst, float* min, float* max, float * scale, float * shift)
+    {
+        Fill(min, channels, FLT_MAX);
+        Fill(max, channels, -FLT_MAX);
+        if (dst.Count() == 4)
+        {
+            for (size_t b = 0; b < dst.Axis(0); ++b)
+            {
+                if (dst.Format() == SimdTensorFormatNhwc)
+                {
+                    for (size_t y = 0; y < dst.Axis(1); ++y)
+                        for (size_t x = 0; x < dst.Axis(2); ++x)
+                            for (size_t c = 0; c < dst.Axis(3); ++c)
+                            {
+                                min[c] = std::min(min[c], dst.Data({ b, y, x, c })[0]);
+                                max[c] = std::max(max[c], dst.Data({ b, y, x, c })[0]);
+                            }
+                }
+                else
+                {
+                    for (size_t c = 0; c < dst.Axis(1); ++c)
+                        for (size_t y = 0; y < dst.Axis(2); ++y)
+                            for (size_t x = 0; x < dst.Axis(3); ++x)
+                            {
+                                min[c] = std::min(min[c], dst.Data({ b, c, y, x })[0]);
+                                max[c] = std::max(max[c], dst.Data({ b, c, y, x })[0]);
+                            }
+                }
+            }
+        }
+        else if (dst.Count() == 3)
+        {
+            for (size_t b = 0; b < dst.Axis(0); ++b)
+            {
+                if (dst.Format() == SimdTensorFormatNhwc)
+                {
+                    for (size_t s = 0; s < dst.Axis(1); ++s)
+                        for (size_t c = 0; c < dst.Axis(2); ++c)
+                        {
+                            min[c] = std::min(min[c], dst.Data({ b, s, c })[0]);
+                            max[c] = std::max(max[c], dst.Data({ b, s, c })[0]);
+                        }
+                }
+                else
+                {
+                    for (size_t c = 0; c < dst.Axis(1); ++c)
+                        for (size_t s = 0; s < dst.Axis(2); ++s)
+                        {
+                            min[c] = std::min(min[c], dst.Data({ b, c, s })[0]);
+                            max[c] = std::max(max[c], dst.Data({ b, c, s })[0]);
+                        }
+                }
+            }
+        }
+        else
+            assert(0);
+        int uMin = Simd::Base::Narrowed(compatibility) ? Simd::Base::U8_NARROWED_MIN : Simd::Base::U8_PRECISE_MIN;
+        int uMax = Simd::Base::Narrowed(compatibility) ? Simd::Base::U8_NARROWED_MAX : Simd::Base::U8_PRECISE_MAX;
+        int iMin = Simd::Base::Narrowed(compatibility) ? Simd::Base::I8_NARROWED_MIN : Simd::Base::I8_PRECISE_MIN;
+        int iMax = Simd::Base::Narrowed(compatibility) ? Simd::Base::I8_NARROWED_MAX : Simd::Base::I8_PRECISE_MAX;
+        if (scale != NULL && shift != NULL)
+        {
+            for (size_t i = 0; i < channels; ++i)
+            {
+                float abs = std::max(Simd::Abs(min[i]), Simd::Abs(max[i]));
+                scale[i] = abs / (negative ? iMax : uMax);
+                shift[i] = float(negative ? iMin : uMin) * scale[i];
+            }            
+        }
+    }
+
+    //-------------------------------------------------------------------------
+
     template <class Channel> bool Compare(const View & a, const View & b, int differenceMax, bool printError, int errorCountMax, int valueCycle,
         const String & description)
     {
@@ -214,6 +526,8 @@ namespace Test
         {
             const Channel * pA = (const Channel*)(a.data + row*a.stride);
             const Channel * pB = (const Channel*)(b.data + row*b.stride);
+            if (memcmp(pA, pB, width * sizeof(Channel)) == 0)
+                continue;
             for (size_t offset = 0; offset < width; ++offset)
             {
                 if (pA[offset] != pB[offset])
@@ -570,5 +884,62 @@ namespace Test
         {
             return ExpandToLeft("", iCount + fCount + 1);
         }
+    }
+
+    bool DirectoryExists(const String & path)
+    {
+#if defined(WIN32)
+        DWORD fileAttribute = GetFileAttributes(path.c_str());
+        return ((fileAttribute != INVALID_FILE_ATTRIBUTES) &&
+            (fileAttribute & FILE_ATTRIBUTE_DIRECTORY) != 0);
+#elif defined(__linux__)
+        DIR * dir = opendir(path.c_str());
+        if (dir != NULL)
+        {
+            ::closedir(dir);
+            return true;
+        }
+        else
+            return false;
+#else
+        return false;
+#endif
+    }
+
+    String DirectoryByPath(const String & path)
+    {
+#ifdef WIN32
+        String sep("\\");
+#else
+        String sep("/");
+#endif
+        size_t pos = path.find_last_of(sep);
+        if (pos == std::string::npos)
+            return path;
+        else
+            return path.substr(0, pos);
+    }
+
+    bool CreatePath(const String & path)
+    {
+#ifdef WIN32
+        return std::system((String("mkdir ") + path).c_str()) == 0;
+#else
+        return std::system((String("mkdir -p ") + path).c_str()) == 0;
+#endif
+    }
+
+    bool CreatePathIfNotExist(const String & path)
+    {
+        String directory = DirectoryByPath(path);
+        if (!DirectoryExists(directory))
+        {
+            if (!CreatePath(directory))
+            {
+                TEST_LOG_SS(Info, "Can't create directory '" << directory << "' !");
+                return false;
+            }
+        }
+        return true;
     }
 }

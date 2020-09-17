@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *               2016-2016 Sintegrial Technologies.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,12 +28,17 @@
 #include "Simd/SimdDefs.h"
 #include "Simd/SimdMath.h"
 
-#if defined(__GNUC__) && defined(SIMD_ALLOCATE_ERROR_MESSAGE)
+#if defined(SIMD_ALLOCATE_ERROR_MESSAGE)
 #include <iostream>
 #endif
 
 namespace Simd
 {
+    SIMD_INLINE size_t DivHi(size_t value, size_t divider)
+    {
+        return (value + divider - 1) / divider;
+    }
+
     SIMD_INLINE size_t AlignHiAny(size_t size, size_t align)
     {
         return (size + align - 1) / align * align;
@@ -88,21 +93,29 @@ namespace Simd
         align = AlignHi(align, sizeof(void *));
         size = AlignHi(size, align);
         int result = ::posix_memalign(&ptr, align, size);
-#ifdef SIMD_ALLOCATE_ERROR_MESSAGE
         if (result != 0)
-            std::cout << "The function posix_memalign can't allocate " << size << " bytes with align " << align << " !" << std::endl << std::flush;
-#endif
-#ifdef SIMD_ALLOCATE_ASSERT
-        assert(result == 0);
-#endif
+            ptr = NULL;
 #else
         ptr = malloc(size);
 #endif
-
+#ifdef SIMD_ALLOCATE_ERROR_MESSAGE
+        if (ptr == NULL)
+            std::cout << "The function posix_memalign can't allocate " << size << " bytes with align " << align << " !" << std::endl << std::flush;
+#endif
+#ifdef SIMD_ALLOCATE_ASSERT
+        assert(ptr);
+#endif
 #ifdef SIMD_NO_MANS_LAND
         if (ptr)
             ptr = (char*)ptr + SIMD_NO_MANS_LAND;
 #endif
+        return ptr;
+    }
+
+    template<class T> T* Allocate(uint8_t*& buffer, size_t size, size_t align = SIMD_ALIGN)
+    {
+        T* ptr = (T*)buffer;
+        buffer = buffer + AlignHi(size * sizeof(T), align);
         return ptr;
     }
 

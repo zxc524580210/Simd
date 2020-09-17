@@ -26,20 +26,8 @@
 
 #include "Simd/SimdDefs.h"
 
-#ifdef SIMD_PERFORMANCE_STATISTIC
-
-#include "Simd/SimdTime.h"
-
 #include <string>
 #include <sstream>
-#include <limits>
-#include <iostream>
-#include <iomanip>
-#include <memory>
-#include <map>
-#include <thread>
-#include <mutex>
-#include <algorithm>
 
 namespace Simd
 {
@@ -51,180 +39,159 @@ namespace Simd
         ss << value;
         return ss.str();
     }
-
-    class PerformanceMeasurer
-    {
-        String	_name;
-        double _start;
-        int _count;
-        double _total;
-        double _min;
-        double _max;
-        bool _entered;
-
-    public:
-        SIMD_INLINE PerformanceMeasurer(const String & name = "Unknown")
-            : _name(name)
-            , _count(0)
-            , _total(0)
-            , _min(std::numeric_limits<double>::max())
-            , _max(std::numeric_limits<double>::min())
-            , _entered(false)
-        {
-        }
-
-        SIMD_INLINE PerformanceMeasurer(const PerformanceMeasurer & pm)
-            : _name(pm._name)
-            , _count(pm._count)
-            , _total(pm._total)
-            , _min(pm._min)
-            , _max(pm._max)
-            , _entered(pm._entered)
-        {
-        }
-
-        SIMD_INLINE void Enter()
-        {
-            if (!_entered)
-            {
-                _entered = true;
-                _start = Time();
-            }
-        }
-
-        SIMD_INLINE void Leave()
-        {
-            if (_entered)
-            {
-                _entered = false;
-                double difference = Time() - _start;
-                _total += difference;
-                _min = std::min(_min, difference);
-                _max = std::max(_max, difference);
-                ++_count;
-            }
-        }
-
-        double Average() const
-        {
-            return _count ? (_total / _count) : 0;
-        }
-
-        String Statistic() const
-        {
-            std::stringstream ss;
-            ss << _name << ": ";
-            ss << std::setprecision(0) << std::fixed << _total * 1000 << " ms";
-            ss << " / " << _count << " = ";
-            ss << std::setprecision(3) << std::fixed << Average()*1000.0 << " ms";
-            ss << std::setprecision(3) << " {min=" << _min * 1000.0 << "; max=" << _max * 1000.0 << "}";
-            return ss.str();
-        }
-
-        void Combine(const PerformanceMeasurer & other)
-        {
-            _count += other._count;
-            _total += other._total;
-            _min = std::min(_min, other._min);
-            _max = std::max(_max, other._max);
-        }
-    };
-
-    class PerformanceMeasurerHolder
-    {
-        PerformanceMeasurer * _pm;
-
-    public:
-        SIMD_INLINE PerformanceMeasurerHolder(PerformanceMeasurer * pm)
-            : _pm(pm)
-        {
-            if (_pm)
-                _pm->Enter();
-        }
-
-        SIMD_INLINE ~PerformanceMeasurerHolder()
-        {
-            if (_pm)
-                _pm->Leave();
-        }
-    };
-
-    class PerformanceMeasurerStorage
-    {
-        typedef PerformanceMeasurer Pm;
-        typedef std::shared_ptr<Pm> PmPtr;
-        typedef std::map<String, PmPtr> FunctionMap;
-        typedef std::map<std::thread::id, FunctionMap> ThreadMap;
-
-        ThreadMap _map;
-        mutable std::recursive_mutex _mutex;
-
-        SIMD_INLINE FunctionMap & ThisThread()
-        {
-            std::lock_guard<std::recursive_mutex> lock(_mutex);
-            return _map[std::this_thread::get_id()];
-        }
-
-    public:
-        static PerformanceMeasurerStorage s_storage;
-
-        PerformanceMeasurerStorage()
-        {
-        }
-
-        ~PerformanceMeasurerStorage()
-        {
-            if (_map.empty())
-                return;
-            FunctionMap combined;
-            {
-                std::lock_guard<std::recursive_mutex> lock(_mutex);
-                for (ThreadMap::const_iterator thread = _map.begin(); thread != _map.end(); ++thread)
-                {
-                    for (FunctionMap::const_iterator function = thread->second.begin(); function != thread->second.end(); ++function)
-                    {
-                        if (combined.find(function->first) == combined.end())
-                            combined[function->first].reset(new PerformanceMeasurer(function->first));
-                        combined[function->first]->Combine(*function->second);
-                    }
-                }
-            }
-            std::cout << std::endl << "Simd Library Internal Performance Statistic:" << std::endl;
-            for (FunctionMap::const_iterator it = combined.begin(); it != combined.end(); ++it)
-                std::cout << it->second->Statistic() << std::endl;
-        }
-
-        SIMD_INLINE PerformanceMeasurer * Get(const String & name)
-        {
-            FunctionMap & thread = ThisThread();
-            PerformanceMeasurer * pm = NULL;
-            FunctionMap::iterator it = thread.find(name);
-            if (it == thread.end())
-            {
-                pm = new PerformanceMeasurer(name);
-                thread[name].reset(pm);
-            }
-            else
-                pm = it->second.get();
-            return pm;
-        }
-
-        SIMD_INLINE PerformanceMeasurer * Get(const String func, const String & block)
-        {
-            return Get(func + "{ " + block + " }");
-        }
-    };
 }
 
-#define SIMD_PERF_FUNC() Simd::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)(Simd::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION))
-#define SIMD_PERF_BEG(block) Simd::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)(Simd::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, block))
-#define SIMD_PERF_IF(cond, block) Simd::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)((cond) ? Simd::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, block) : NULL)
-#define SIMD_PERF_END(block) Simd::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, block)->Leave();
+#if defined(SIMD_PERFORMANCE_STATISTIC)// && defined(NDEBUG)
+
+#include "Simd/SimdTime.h"
+
+#include <limits>
+#include <iostream>
+#include <iomanip>
+#include <memory>
+#include <map>
+#include <thread>
+#include <mutex>
+#include <algorithm>
+
+namespace Simd
+{
+    namespace Base
+    {
+        class PerformanceMeasurer
+        {
+            String	_name;
+            int64_t _start, _current, _total, _min, _max;
+            int64_t _count, _flop;
+            bool _entered, _paused;
+
+        public:
+            PerformanceMeasurer(const String& name = "Unknown", int64_t flop = 0);
+
+            PerformanceMeasurer(const PerformanceMeasurer& pm);
+
+            void Enter();
+
+            void Leave(bool pause = false);
+
+            String Statistic() const;
+
+            void Combine(const PerformanceMeasurer& other);
+
+        private:
+            double Average() const;
+            double GFlops() const;
+        };
+
+        class PerformanceMeasurerHolder
+        {
+            PerformanceMeasurer * _pm;
+
+        public:
+            SIMD_INLINE PerformanceMeasurerHolder(PerformanceMeasurer * pm, bool enter = true)
+                : _pm(pm)
+            {
+                if (_pm && enter)
+                    _pm->Enter();
+            }
+
+            SIMD_INLINE void Enter()
+            {
+                if (_pm)
+                    _pm->Enter();
+            }
+
+            SIMD_INLINE void Leave(bool pause)
+            {
+                if (_pm)
+                    _pm->Leave(pause);
+            }
+
+            SIMD_INLINE ~PerformanceMeasurerHolder()
+            {
+                if (_pm)
+                    _pm->Leave();
+            }
+        };
+
+        class PerformanceMeasurerStorage
+        {
+            typedef PerformanceMeasurer Pm;
+            typedef std::shared_ptr<Pm> PmPtr;
+            typedef std::map<String, PmPtr> FunctionMap;
+            typedef std::map<std::thread::id, FunctionMap> ThreadMap;
+
+            ThreadMap _map;
+            mutable std::mutex _mutex;
+            String _report;
+
+            SIMD_INLINE FunctionMap & ThisThread()
+            {
+                static thread_local FunctionMap * thread = NULL;
+                if (thread == NULL)
+                {
+                    std::lock_guard<std::mutex> lock(_mutex);
+                    thread = &_map[std::this_thread::get_id()];
+                }
+                return *thread;
+            }
+
+        public:
+            static PerformanceMeasurerStorage s_storage;
+
+            PerformanceMeasurerStorage()
+            {
+            }
+
+            SIMD_INLINE PerformanceMeasurer * Get(const String & name, int64_t flop = 0)
+            {
+                FunctionMap & thread = ThisThread();
+                PerformanceMeasurer * pm = NULL;
+                FunctionMap::iterator it = thread.find(name);
+                if (it == thread.end())
+                {
+                    pm = new PerformanceMeasurer(name, flop);
+                    thread[name].reset(pm);
+                }
+                else
+                    pm = it->second.get();
+                return pm;
+            }
+
+            SIMD_INLINE PerformanceMeasurer * Get(const String func, const String & desc, int64_t flop = 0)
+            {
+                return Get(func + "{ " + desc + " }", flop);
+            }
+
+            const char* PerformanceStatistic();
+        };
+    }
+}
+#define SIMD_PERF_FUNCF(flop) Simd::Base::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)(Simd::Base::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, (long long)(flop)))
+#define SIMD_PERF_FUNC() SIMD_PERF_FUNCF(0)
+#define SIMD_PERF_BEGF(desc, flop) Simd::Base::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)(Simd::Base::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, desc, (long long)(flop)))
+#define SIMD_PERF_BEG(desc) SIMD_PERF_BEGF(desc, 0)
+#define SIMD_PERF_IFF(cond, desc, flop) Simd::Base::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)((cond) ? Simd::Base::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, desc, (long long)(flop)) : NULL)
+#define SIMD_PERF_IF(cond, desc) SIMD_PERF_IFF(cond, desc, 0)
+#define SIMD_PERF_END(desc) Simd::Base::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, desc)->Leave();
+#define SIMD_PERF_INITF(name, desc, flop) Simd::Base::PerformanceMeasurerHolder name(Simd::Base::PerformanceMeasurerStorage::s_storage.Get(SIMD_FUNCTION, desc, (long long)(flop)), false);
+#define SIMD_PERF_INIT(name, desc)  SIMD_PERF_INITF(name, desc, 0);
+#define SIMD_PERF_START(name) name.Enter(); 
+#define SIMD_PERF_PAUSE(name) name.Leave(true);
+#define SIMD_PERF_EXT(ext) Simd::Base::PerformanceMeasurerHolder SIMD_CAT(__pmh, __LINE__)((ext)->Perf(SIMD_FUNCTION)) 
 #else//SIMD_PERFORMANCE_STATISTIC
+#define SIMD_PERF_FUNCF(flop)
 #define SIMD_PERF_FUNC()
-#define SIMD_PERF_BEG(block)
-#define SIMD_PERF_IF(cond, block)
-#define SIMD_PERF_END(block)
+#define SIMD_PERF_BEGF(desc, flop)
+#define SIMD_PERF_BEG(desc)
+#define SIMD_PERF_IFF(cond, desc, flop)
+#define SIMD_PERF_IF(cond, desc)
+#define SIMD_PERF_END(desc)
+#define SIMD_PERF_INITF(name, desc, flop)
+#define SIMD_PERF_INIT(name, desc)
+#define SIMD_PERF_START(name)
+#define SIMD_PERF_PAUSE(name)
+#define SIMD_PERF_EXT(ext)
 #endif//SIMD_PERFORMANCE_STATISTIC 
 
 #endif//__SimdPerformance_h__

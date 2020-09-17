@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -179,7 +179,7 @@ namespace Simd
             {
                 __m512i i = _mm512_castps_si512(x);
                 __m512 e = _mm512_cvtepi32_ps(_mm512_sub_epi32(_mm512_srli_epi32(_mm512_and_si512(i, _exponent), 23), _mm512_set1_epi32(127)));
-                __m512 m = _mm512_or_ps(_mm512_castsi512_ps(_mm512_and_si512(i, _mantissa)), _one);
+                __m512 m = Or(_mm512_castsi512_ps(_mm512_and_si512(i, _mantissa)), _one);
                 __m512 p = Poly5(m, 3.1157899f, -3.3241990f, 2.5988452f, -1.2315303f, 3.1821337e-1f, -3.4436006e-2f);
                 return _mm512_fmadd_ps(p, _mm512_sub_ps(m, _one), e);
             }

@@ -93,7 +93,7 @@ namespace Simd
         template <bool align> void Fill32f(float * dst, size_t size, const float * value)
         {
             if (value == 0 || value[0] == 0)
-                memset(dst, 0, sizeof(float));
+                memset(dst, 0, size * sizeof(float));
             else
             {
                 float v = value[0];
@@ -103,7 +103,6 @@ namespace Simd
                 const float * end = dst + size;
                 const float * endF = dst + AlignLo(size, F);
                 const float * endQF = dst + AlignLo(size, QF);
-                size_t i = 0;
                 float32x4_t _v = vdupq_n_f32(v);
                 for (; dst < endQF; dst += QF)
                 {

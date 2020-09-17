@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2017 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -46,7 +46,6 @@ namespace Simd
             Store<align>((__m128i*)bgr + 0, _mm_or_si128(_mm_shuffle_epi8(bgra0, k[0][0]), _mm_shuffle_epi8(bgra1, k[0][1])));
             Store<align>((__m128i*)bgr + 1, _mm_or_si128(_mm_shuffle_epi8(bgra1, k[1][0]), _mm_shuffle_epi8(bgra2, k[1][1])));
             Store<align>((__m128i*)bgr + 2, _mm_or_si128(_mm_shuffle_epi8(bgra2, k[2][0]), _mm_shuffle_epi8(bgra3, k[2][1])));
-            Store<align>((__m128i*)bgr + 2, _mm_or_si128(_mm_shuffle_epi8(bgra2, k[2][0]), _mm_shuffle_epi8(bgra3, k[2][1])));
         }
 
         template <bool align> void BgraToBgr(const uint8_t * bgra, size_t width, size_t height, size_t bgraStride, uint8_t * bgr, size_t bgrStride)
@@ -84,6 +83,45 @@ namespace Simd
                 BgraToBgr<true>(bgra, width, height, bgraStride, bgr, bgrStride);
             else
                 BgraToBgr<false>(bgra, width, height, bgraStride, bgr, bgrStride);
+        }
+
+        //---------------------------------------------------------------------
+
+        template <bool align> void BgraToRgb(const uint8_t* bgra, size_t width, size_t height, size_t bgraStride, uint8_t* rgb, size_t rgbStride)
+        {
+            assert(width >= A);
+            if (align)
+                assert(Aligned(bgra) && Aligned(bgraStride) && Aligned(rgb) && Aligned(rgbStride));
+
+            size_t alignedWidth = AlignLo(width, A);
+            if (width == alignedWidth)
+                alignedWidth -= A;
+
+            __m128i k[3][2];
+            k[0][0] = _mm_setr_epi8(0x2, 0x1, 0x0, 0x6, 0x5, 0x4, 0xA, 0x9, 0x8, 0xE, 0xD, 0xC, -1, -1, -1, -1);
+            k[0][1] = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0x2, 0x1, 0x0, 0x6);
+            k[1][0] = _mm_setr_epi8(0x5, 0x4, 0xA, 0x9, 0x8, 0xE, 0xD, 0xC, -1, -1, -1, -1, -1, -1, -1, -1);
+            k[1][1] = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 0x2, 0x1, 0x0, 0x6, 0x5, 0x4, 0xA, 0x9);
+            k[2][0] = _mm_setr_epi8(0x8, 0xE, 0xD, 0xC, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+            k[2][1] = _mm_setr_epi8(-1, -1, -1, -1, 0x2, 0x1, 0x0, 0x6, 0x5, 0x4, 0xA, 0x9, 0x8, 0xE, 0xD, 0xC);
+
+            for (size_t row = 0; row < height; ++row)
+            {
+                for (size_t col = 0; col < alignedWidth; col += A)
+                    BgraToBgrBody<align>(bgra + 4 * col, rgb + 3 * col, k);
+                if (width != alignedWidth)
+                    BgraToBgr<false>(bgra + 4 * (width - A), rgb + 3 * (width - A), k);
+                bgra += bgraStride;
+                rgb += rgbStride;
+            }
+        }
+
+        void BgraToRgb(const uint8_t* bgra, size_t width, size_t height, size_t bgraStride, uint8_t* rgb, size_t rgbStride)
+        {
+            if (Aligned(bgra) && Aligned(bgraStride) && Aligned(rgb) && Aligned(rgbStride))
+                BgraToRgb<true>(bgra, width, height, bgraStride, rgb, rgbStride);
+            else
+                BgraToRgb<false>(bgra, width, height, bgraStride, rgb, rgbStride);
         }
     }
 #endif// SIMD_SSSE3_ENABLE

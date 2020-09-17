@@ -26,67 +26,140 @@
 #include "Simd/SimdArray.h"
 #include "Simd/SimdPow.h"
 #include "Simd/SimdExp.h"
+#include "Simd/SimdBase.h"
+#include "Simd/SimdSynet.h"
 
 namespace Simd
 {
 #ifdef SIMD_SSE2_ENABLE    
     namespace Sse2
     {
-        template <bool align> SIMD_INLINE void SynetLrnLayerCrossChannels(const float * src, size_t half, size_t count, size_t size, const float * k, float * dst)
+        template<int shift> SIMD_INLINE __m128 LoadAtEdge(const float * src)
         {
-            size_t aligned = AlignLo(size, F);
-            Array32f sum(size, true), zero(size, true);
+            static const int32_t mask[3 * F] = { 0, 0, 0, 0, -1, -1, -1, -1, 0, 0, 0, 0 };
+            return _mm_and_ps(_mm_loadu_ps(src + shift), _mm_loadu_ps((float*)mask + F + shift));
+        }
 
-            for (size_t i = 0; i < half; ++i)
-            {
-                const float * pos = src + i * size;
-                size_t j = 0;
-                for (; j < aligned; j += F)
-                {
-                    __m128 _pos = Sse::Load<align>(pos + j);
-                    Sse::Store<true>(sum.data + j, _mm_add_ps(Sse::Load<true>(sum.data + j), _mm_mul_ps(_pos, _pos)));
-                }
-                for (; j < size; ++j)
-                    sum[j] += Simd::Square(pos[j]);
-            }
+        SIMD_INLINE __m128 NoseSquareSum(const float * src)
+        {
+            return _mm_add_ps(_mm_add_ps(Sse::Square(LoadAtEdge<-2>(src)), Sse::Square(LoadAtEdge<-1>(src))),
+                _mm_add_ps(Sse::Square(_mm_loadu_ps(src)), _mm_add_ps(Sse::Square(_mm_loadu_ps(src + 1)), Sse::Square(_mm_loadu_ps(src + 2)))));
+        }
 
+        SIMD_INLINE __m128 BodySquareSum(const float * src)
+        {
+            return _mm_add_ps(_mm_add_ps(Sse::Square(_mm_loadu_ps(src - 2)), Sse::Square(_mm_loadu_ps(src - 1))),
+                _mm_add_ps(Sse::Square(_mm_loadu_ps(src)), _mm_add_ps(Sse::Square(_mm_loadu_ps(src + 1)), Sse::Square(_mm_loadu_ps(src + 2)))));
+        }
+
+        SIMD_INLINE __m128 TailSquareSum(const float * src)
+        {
+            return _mm_add_ps(_mm_add_ps(Sse::Square(LoadAtEdge<2>(src)), Sse::Square(LoadAtEdge<1>(src))),
+                _mm_add_ps(Sse::Square(_mm_loadu_ps(src)), _mm_add_ps(Sse::Square(_mm_loadu_ps(src - 1)), Sse::Square(_mm_loadu_ps(src - 2)))));
+        }
+
+        template<bool align> void SynetLrnLayerCrossChannelsNchw(const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst)
+        {
             __m128 k0 = _mm_set1_ps(k[0]);
             __m128 k1 = _mm_set1_ps(k[1]);
             __m128 k2 = _mm_set1_ps(k[2]);
             Sse2::Pow pow;
-            for (size_t i = 0; i < count; ++i)
+            Array32f sum(spatial, true), zero(spatial, true);
+            size_t aligned = AlignLo(spatial, F);
+            for (size_t c = 0; c < half; ++c)
             {
-                const float * pos = (i < count - half) ? src + half * size : zero.data;
-                const float * neg = (i > half) ? src - (half + 1) * size : zero.data;
-                size_t j = 0;
-                for (; j < aligned; j += F)
+                const float * pos = src + c * spatial;
+                size_t s = 0;
+                for (; s < aligned; s += F)
                 {
-                    __m128 _pos = Sse::Load<align>(pos + j);
-                    __m128 _neg = Sse::Load<align>(neg + j);
-                    __m128 _sum = Sse::Load<true>(sum.data + j);
+                    __m128 _pos = Sse::Load<align>(pos + s);
+                    Sse::Store<true>(sum.data + s, _mm_add_ps(Sse::Load<true>(sum.data + s), _mm_mul_ps(_pos, _pos)));
+                }
+                for (; s < spatial; ++s)
+                    sum[s] += Simd::Square(pos[s]);
+            }
+            for (size_t c = 0; c < channels; ++c)
+            {
+                const float * pos = (c < channels - half) ? src + half * spatial : zero.data;
+                const float * neg = (c > half) ? src - (half + 1) * spatial : zero.data;
+                size_t s = 0;
+                for (; s < aligned; s += F)
+                {
+                    __m128 _pos = Sse::Load<align>(pos + s);
+                    __m128 _neg = Sse::Load<align>(neg + s);
+                    __m128 _sum = Sse::Load<true>(sum.data + s);
                     _sum = _mm_add_ps(_sum, _mm_sub_ps(_mm_mul_ps(_pos, _pos), _mm_mul_ps(_neg, _neg)));
-                    __m128 _src = Sse::Load<align>(src + j);
-                    Sse::Store<true>(sum.data + j, _sum);
-                    Sse::Store<align>(dst + j, _mm_mul_ps(_src, pow(_mm_add_ps(k0, _mm_mul_ps(k1, _sum)), k2)));
+                    __m128 _src = Sse::Load<align>(src + s);
+                    Sse::Store<true>(sum.data + s, _sum);
+                    Sse::Store<align>(dst + s, _mm_mul_ps(_src, pow(_mm_add_ps(k0, _mm_mul_ps(k1, _sum)), k2)));
                 }
-                for (; j < size; ++j)
+                for (; s < spatial; ++s)
                 {
-                    sum[j] += Simd::Square(pos[j]);
-                    sum[j] -= Simd::Square(neg[j]);
-                    dst[j] = src[j] * Base::Pow(k[0] + k[1] * sum[j], k[2]);
+                    sum[s] += Simd::Square(pos[s]);
+                    sum[s] -= Simd::Square(neg[s]);
+                    dst[s] = src[s] * Base::Pow(k[0] + k[1] * sum[s], k[2]);
                 }
-                src += size;
-                dst += size;
+                src += spatial;
+                dst += spatial;
             }
         }
 
-        void SynetLrnLayerCrossChannels(const float * src, size_t half, size_t count, size_t size, const float * k, float * dst)
+        SIMD_INLINE void SynetLrnLayerCrossChannelsNchw(const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst)
         {
-            if (Aligned(src) && Aligned(dst) && Aligned(size))
-                SynetLrnLayerCrossChannels<true>(src, half, count, size, k, dst);
+            if (Aligned(src) && Aligned(dst) && Aligned(spatial, F))
+                SynetLrnLayerCrossChannelsNchw<true>(src, half, channels, spatial, k, dst);
             else
-                SynetLrnLayerCrossChannels<false>(src, half, count, size, k, dst);
+                SynetLrnLayerCrossChannelsNchw<false>(src, half, channels, spatial, k, dst);
         }
+
+        template<bool align> void SynetLrnLayerCrossChannelsNhwc2h(const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst)
+        {
+            __m128 k0 = _mm_set1_ps(k[0]);
+            __m128 k1 = _mm_set1_ps(k[1]);
+            __m128 k2 = _mm_set1_ps(k[2]);
+            Sse2::Pow pow;
+            size_t aligned = AlignLo(channels - half, F);
+            for (size_t s = 0; s < spatial; ++s)
+            {
+                Sse::Store<align>(dst + 0, _mm_mul_ps(Sse::Load<align>(src + 0), pow(_mm_add_ps(k0, _mm_mul_ps(k1, NoseSquareSum(src + 0))), k2)));
+                for (size_t c = F; c < aligned; c += F)
+                    Sse::Store<align>(dst + c, _mm_mul_ps(Sse::Load<align>(src + c), pow(_mm_add_ps(k0, _mm_mul_ps(k1, BodySquareSum(src + c))), k2)));
+                if (aligned != channels - half)
+                {
+                    size_t c = channels - half - F;
+                    Sse::Store<false>(dst + c, _mm_mul_ps(Sse::Load<false>(src + c), pow(_mm_add_ps(k0, _mm_mul_ps(k1, BodySquareSum(src + c))), k2)));
+                }
+                size_t c = channels - F;
+                Sse::Store<false>(dst + c, _mm_mul_ps(Sse::Load<false>(src + c), pow(_mm_add_ps(k0, _mm_mul_ps(k1, TailSquareSum(src + c))), k2)));
+                src += channels;
+                dst += channels;
+            }
+        }
+
+        SIMD_INLINE void SynetLrnLayerCrossChannelsNhwc(const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst)
+        {
+            if (half == 2 && channels >= F + half)
+            {
+                if (Aligned(src) && Aligned(dst) && Aligned(channels, F))
+                    SynetLrnLayerCrossChannelsNhwc2h<true>(src, half, channels, spatial, k, dst);
+                else
+                    SynetLrnLayerCrossChannelsNhwc2h<false>(src, half, channels, spatial, k, dst);
+            }
+            else
+                Base::SynetLrnLayerCrossChannels(src, half, channels, spatial, k, dst, SimdTensorFormatNhwc);
+        }
+
+        void SynetLrnLayerCrossChannels(const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst, SimdTensorFormatType format)
+        {
+            if (format == SimdTensorFormatNchw)
+                SynetLrnLayerCrossChannelsNchw(src, half, channels, spatial, k, dst);
+            else if (format == SimdTensorFormatNhwc)
+                SynetLrnLayerCrossChannelsNhwc(src, half, channels, spatial, k, dst);
+            else
+                Base::SynetLrnLayerCrossChannels(src, half, channels, spatial, k, dst, format);
+        }
+
+        //---------------------------------------------------------------------
 
         void SynetSoftmaxLayerForward(const float * src, size_t outer, size_t count, size_t inner, float * dst)
         {
@@ -179,6 +252,93 @@ namespace Simd
                     dst += count * inner;
                 }
             }
+        }
+
+        //---------------------------------------------------------------------
+
+        template<SimdSynetUnaryOperation32fType type> __m128 SynetUnaryOperation32f(__m128 value);
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fAbs>(__m128 value)
+        {
+            return _mm_andnot_ps(_mm_set1_ps(-0.0f), value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fExp>(__m128 value)
+        {
+            return Exponent(value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fLog>(__m128 value)
+        {
+            return Logarithm(value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fNeg>(__m128 value)
+        {
+            return _mm_sub_ps(_mm_setzero_ps(), value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fRsqrt>(__m128 value)
+        {
+            return _mm_rsqrt_ps(value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fSqrt>(__m128 value)
+        {
+            return _mm_sqrt_ps(value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fTanh>(__m128 value)
+        {
+            return Tanh(value);
+        }
+
+        template<> SIMD_INLINE __m128 SynetUnaryOperation32f<SimdSynetUnaryOperation32fZero>(__m128 value)
+        {
+            return _mm_setzero_ps();
+        }
+
+        template<SimdSynetUnaryOperation32fType type, bool align> void SynetUnaryOperation32fLayerForward(const float* src, size_t size, float* dst)
+        {
+            size_t sizeF = AlignLo(size, F);
+            size_t sizeQF = AlignLo(size, QF);
+            size_t i = 0;
+            for (; i < sizeQF; i += QF)
+            {
+                Sse::Store<align>(dst + i + 0 * F, SynetUnaryOperation32f<type>(Sse::Load<align>(src + i + 0 * F)));
+                Sse::Store<align>(dst + i + 1 * F, SynetUnaryOperation32f<type>(Sse::Load<align>(src + i + 1 * F)));
+                Sse::Store<align>(dst + i + 2 * F, SynetUnaryOperation32f<type>(Sse::Load<align>(src + i + 2 * F)));
+                Sse::Store<align>(dst + i + 3 * F, SynetUnaryOperation32f<type>(Sse::Load<align>(src + i + 3 * F)));
+            }
+            for (; i < sizeF; i += F)
+                Sse::Store<align>(dst + i, SynetUnaryOperation32f<type>(Sse::Load<align>(src + i)));
+            for (; i < size; ++i)
+                dst[i] = Base::SynetUnaryOperation32f<type>(src[i]);
+        }
+
+        template<bool align> void SynetUnaryOperation32fLayerForward(const float* src, size_t size, SimdSynetUnaryOperation32fType type, float* dst)
+        {
+            switch (type)
+            {
+            case SimdSynetUnaryOperation32fAbs: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fAbs, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fExp: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fExp, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fLog: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fLog, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fNeg: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fNeg, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fRsqrt: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fRsqrt, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fSqrt: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fSqrt, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fTanh: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fTanh, align>(src, size, dst); break;
+            case SimdSynetUnaryOperation32fZero: SynetUnaryOperation32fLayerForward<SimdSynetUnaryOperation32fZero, align>(src, size, dst); break;
+            default:
+                assert(0);
+            }
+        }
+
+        void SynetUnaryOperation32fLayerForward(const float* src, size_t size, SimdSynetUnaryOperation32fType type, float* dst)
+        {
+            if (Aligned(src) && Aligned(dst))
+                SynetUnaryOperation32fLayerForward<true>(src, size, type, dst);
+            else
+                SynetUnaryOperation32fLayerForward<false>(src, size, type, dst);
         }
     }
 #endif// SIMD_SSE2_ENABLE

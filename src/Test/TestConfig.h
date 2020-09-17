@@ -1,7 +1,7 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -66,6 +66,7 @@
 #include "Simd/SimdAvx2.h"
 #include "Simd/SimdAvx512f.h"
 #include "Simd/SimdAvx512bw.h"
+#include "Simd/SimdAvx512vnni.h"
 #include "Simd/SimdVmx.h"
 #include "Simd/SimdVsx.h"
 #include "Simd/SimdNeon.h"
@@ -74,6 +75,8 @@
 
 namespace Test
 {
+    template <class T> class Tensor;
+
     typedef std::string String;
     typedef std::vector<String> Strings;
     typedef Simd::View<Simd::Allocator> View;
@@ -88,19 +91,24 @@ namespace Test
     typedef std::vector<uint64_t> Sums64;
     typedef std::vector<float, Simd::Allocator<float> > Buffer32f;
     typedef std::vector<float*> FloatPtrs;
+    typedef Tensor<float> Tensor32f;
+    typedef Tensor<uint8_t> Tensor8u;
+    typedef Tensor<int8_t> Tensor8i;
+    typedef Tensor<int32_t> Tensor32i;
 
     const int E = 10;
     const int O = 9;
 
-    const double MINIMAL_TEST_EXECUTION_TIME = 0.1;
+    extern double MINIMAL_TEST_EXECUTION_TIME;
 
     const int DW = 48;
     const int DH = 64;
 
     const float EPS = 0.001f;
 
+    extern int C;
+    extern int H;    
     extern int W;
-    extern int H;
 
     extern String ROOT_PATH;
     extern String SOURCE;

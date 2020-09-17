@@ -1,8 +1,9 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar,
-*               2014-2016 Antonenka Mikhail.
+* Copyright (c) 2011-2020 Yermalayeu Ihar,
+*               2014-2019 Antonenka Mikhail,
+*               2019-2019 Facundo Galan.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -33,6 +34,62 @@
 /*! \namespace Simd */
 namespace Simd
 {
+    /*! @ingroup info
+
+    \fn void PrintInfo(std::ostream & os)
+
+    \short Prints information about %Simd Library and CPU properties.
+
+    \param [in, out] os - output stream.
+    */
+    SIMD_INLINE void PrintInfo(std::ostream & os)
+    {
+        os << "Simd Library: " << SimdVersion();
+        os << "; System Sockets: " << SimdCpuInfo(SimdCpuInfoSockets);
+        os << ", Cores: " << SimdCpuInfo(SimdCpuInfoCores);
+        os << ", Threads: " << SimdCpuInfo(SimdCpuInfoThreads);
+        os << "; Cache L1D: " << SimdCpuInfo(SimdCpuInfoCacheL1) / 1024 << " KB";
+        os << ", L2: " << SimdCpuInfo(SimdCpuInfoCacheL2) / 1024 << " KB";
+        os << ", L3: " << SimdCpuInfo(SimdCpuInfoCacheL3) / 1024 << " KB";
+        os << "; Available SIMD:";
+        os << (SimdCpuInfo(SimdCpuInfoAvx512vnni) ? " AVX-512VNNI" : "");
+        os << (SimdCpuInfo(SimdCpuInfoAvx512bw) ? " AVX-512BW" : "");
+        os << (SimdCpuInfo(SimdCpuInfoAvx512f) ? " AVX-512F" : "");
+        os << (SimdCpuInfo(SimdCpuInfoAvx2) ? " AVX2 FMA" : "");
+        os << (SimdCpuInfo(SimdCpuInfoAvx) ? " AVX" : "");
+        os << (SimdCpuInfo(SimdCpuInfoSse41) ? " SSE4.1" : "");
+        os << (SimdCpuInfo(SimdCpuInfoSsse3) ? " SSSE3" : "");
+        os << (SimdCpuInfo(SimdCpuInfoSse3) ? " SSE3" : "");
+        os << (SimdCpuInfo(SimdCpuInfoSse2) ? " SSE2" : "");
+        os << (SimdCpuInfo(SimdCpuInfoSse) ? " SSE" : "");
+        os << (SimdCpuInfo(SimdCpuInfoVmx) ? " Altivec" : "");
+        os << (SimdCpuInfo(SimdCpuInfoVsx) ? " VSX" : "");
+        os << (SimdCpuInfo(SimdCpuInfoNeon) ? " NEON" : "");
+        os << (SimdCpuInfo(SimdCpuInfoMsa) ? " MSA" : "");
+        os << std::endl;
+    }
+
+    /*! @ingroup correlation
+
+        \fn void AbsDifference(const View<A> & a, const View<A> & b, View<A> & c)
+
+        \short Gets absolute difference of two gray 8-bit images, pyxel by pixel.
+
+        Both images must have the same width and height.
+
+        \note This function is a C++ wrapper for function ::SimdAbsDifference.
+
+        \param [in] a - a first image.
+        \param [in] b - a second image.
+        \param [out] c - a destination image.
+    */
+    template<template<class> class A> SIMD_INLINE void AbsDifference(const View<A> & a, const View<A> & b, View<A> & c)
+    {
+        assert(Compatible(a, b) && Compatible(b, c) && a.format == View<A>::Gray8);
+
+        SimdAbsDifference(a.data, a.stride, b.data, b.stride, c.data, c.stride, a.width, a.height);
+    }
+
     /*! @ingroup correlation
 
         \fn void AbsDifferenceSum(const View<A>& a, const View<A>& b, uint64_t & sum)
@@ -634,6 +691,26 @@ namespace Simd
 
     /*! @ingroup bgra_conversion
 
+        \fn void BgraToRgb(const View<A>& bgra, View<A>& rgb)
+
+        \short Converts 32-bit BGRA image to 24-bit RGB image.
+
+        All images must have the same width and height.
+
+        \note This function is a C++ wrapper for function ::SimdBgraToRgb.
+
+        \param [in] bgra - an input 32-bit BGRA image.
+        \param [out] rgb - an output 24-bit RGB image.
+    */
+    template<template<class> class A> SIMD_INLINE void BgraToRgb(const View<A>& bgra, View<A>& rgb)
+    {
+        assert(EqualSize(bgra, rgb) && bgra.format == View<A>::Bgra32 && rgb.format == View<A>::Rgb24);
+
+        SimdBgraToRgb(bgra.data, bgra.width, bgra.height, bgra.stride, rgb.data, rgb.stride);
+    }
+
+    /*! @ingroup bgra_conversion
+
         \fn void BgraToYuv420p(const View<A>& bgra, View<A>& y, View<A>& u, View<A>& v)
 
         \short Converts 32-bit BGRA image to YUV420P.
@@ -857,6 +934,26 @@ namespace Simd
         assert(EqualSize(bgr, hsv) && bgr.format == View<A>::Bgr24 && hsv.format == View<A>::Hsv24);
 
         SimdBgrToHsv(bgr.data, bgr.width, bgr.height, bgr.stride, hsv.data, hsv.stride);
+    }
+
+    /*! @ingroup bgr_conversion
+
+        \fn void BgrToRgb(const View<A> & bgr, View<A> & rgb)
+
+        \short Converts 24-bit BGR image to 24-bit RGB image (also it performs backward conversion).
+
+        All images must have the same width and height.
+
+        \note This function is a C++ wrapper for function ::SimdBgrToRgb.
+
+        \param [in] bgr - an input 24-bit BGR image.
+        \param [out] rgb - an output 24-bit RGB image.
+    */
+    template<template<class> class A> SIMD_INLINE void BgrToRgb(const View<A> & bgr, View<A> & rgb)
+    {
+        assert(EqualSize(bgr, rgb) && bgr.PixelSize() == 3 && rgb.PixelSize() == 3);
+
+        SimdBgrToRgb(bgr.data, bgr.stride, bgr.width, bgr.height, rgb.data, rgb.stride);
     }
 
     /*! @ingroup bgr_conversion
@@ -1777,7 +1874,12 @@ namespace Simd
         \short Changes colors for 8-bit gray image with using of color map.
 
         The input and output 8-bit gray images must have the same size.
-
+        Algorithm description:
+        \verbatim
+        for(y = 0; y < height; ++y)
+            for(x = 0; x < width; ++x)
+                dst[x, y] = colors[src[x, y]];
+        \endverbatim
         \note This function is a C++ wrapper for function ::SimdChangeColors.
 
         \param [in] src - an input 8-bit gray image.
@@ -2256,6 +2358,24 @@ namespace Simd
         SimdLbpEstimate(src.data, src.stride, src.width, src.height, dst.data, dst.stride);
     }
 
+    /*! @ingroup memory
+
+        \fn void LitterCpuCache(size_t k = 2)
+
+        \short It creates a large buffer and fills it. 
+
+        This function litters CPU cache. It is useful for test purposes.
+
+        \param [in] k - a boosting coefficient of stub buffer size relative to CPU L3 cache size. Its default value is 2.
+    */
+    SIMD_INLINE void LitterCpuCache(size_t k = 2)
+    {
+        size_t size = SimdCpuInfo(SimdCpuInfoCacheL3)*k;
+        uint8_t * buffer = (uint8_t*)SimdAllocate(size, SimdAlignment());
+        SimdFillBgra(buffer, size, size / 4, 1, 0, 1, 2, 3);
+        SimdFree(buffer);
+    }
+
     /*! @ingroup other_filter
 
         \fn void MeanFilter3x3(const View<A>& src, View<A>& dst)
@@ -2730,6 +2850,81 @@ namespace Simd
             else
                 Simd::ResizeBilinear(src, dst);
         }
+    }
+
+    /*! @ingroup resizing
+
+        \fn void Resize(const View<A> & src, View<A> & dst, ::SimdResizeMethodType method = ::SimdResizeMethodBilinear)
+
+        \short Performs resizing of image.
+
+        All images must have the same format.
+
+        \param [in] src - an original input image.
+        \param [out] dst - a resized output image.
+        \param [in] method - a resizing method. By default it is equal to ::SimdResizeMethodBilinear.
+    */
+    template<template<class> class A> SIMD_INLINE void Resize(const View<A> & src, View<A> & dst, ::SimdResizeMethodType method = ::SimdResizeMethodBilinear)
+    {
+        assert(src.format == dst.format && (src.format == View<A>::Float || src.ChannelSize() == 1));
+
+        if (EqualSize(src, dst))
+        {
+            Copy(src, dst);
+        }
+        else
+        {
+            SimdResizeChannelType type = src.format == View<A>::Float ? SimdResizeChannelFloat : SimdResizeChannelByte;
+            void * resizer = SimdResizerInit(src.width, src.height, dst.width, dst.height, src.ChannelCount(), type, method);
+            if (resizer)
+            {
+                SimdResizerRun(resizer, src.data, src.stride, dst.data, dst.stride);
+                SimdRelease(resizer);
+            }
+            else
+                assert(0);
+        }
+    }
+
+    /*! @ingroup rgb_conversion
+
+        \fn void RgbToGray(const View<A>& rgb, View<A>& gray)
+
+        \short Converts 24-bit RGB image to 8-bit gray image.
+
+        All images must have the same width and height.
+
+        \note This function is a C++ wrapper for function ::SimdRgbToGray.
+
+        \param [in] rgb - an input 24-bit RGB image.
+        \param [out] gray - an output 8-bit gray image.
+    */
+    template<template<class> class A> SIMD_INLINE void RgbToGray(const View<A>& rgb, View<A>& gray)
+    {
+        assert(EqualSize(rgb, gray) && rgb.format == View<A>::Rgb24 && gray.format == View<A>::Gray8);
+
+        SimdRgbToGray(rgb.data, rgb.width, rgb.height, rgb.stride, gray.data, gray.stride);
+    }
+
+    /*! @ingroup rgb_conversion
+
+        \fn void RgbToBgra(const View<A>& rgb, View<A>& bgra, uint8_t alpha = 0xFF)
+
+        \short Converts 24-bit RGB image to 32-bit BGRA image.
+
+        All images must have the same width and height.
+
+        \note This function is a C++ wrapper for function ::SimdRgbToBgra.
+
+        \param [in] rgb - an input 24-bit RGB image.
+        \param [out] bgra - an output 32-bit BGRA image.
+        \param [in] alpha - a value of alpha channel. It is equal to 256 by default.
+    */
+    template<template<class> class A> SIMD_INLINE void RgbToBgra(const View<A>& rgb, View<A>& bgra, uint8_t alpha = 0xFF)
+    {
+        assert(EqualSize(rgb, bgra) && bgra.format == View<A>::Bgra32 && rgb.format == View<A>::Rgb24);
+
+        SimdRgbToBgra(rgb.data, rgb.width, rgb.height, rgb.stride, bgra.data, bgra.stride, alpha);
     }
 
     /*! @ingroup segmentation
@@ -3211,6 +3406,56 @@ namespace Simd
         SimdGetMoments(mask.data, mask.stride, mask.width, mask.height, index, &area, &x, &y, &xx, &xy, &yy);
     }
 
+
+    /*! @ingroup other_statistic
+
+        \fn void GetObjectMoments(const View<A> & src, const View<A> & mask, uint8_t index, uint64_t & n, uint64_t & s, uint64_t & sx, uint64_t & sy, uint64_t & sxx, uint64_t & sxy, uint64_t & syy)
+
+        \short Calculate statistical characteristics (moments) of given object.
+
+        The images must has 8-bit gray format and equal size. One of them can be empty.
+
+        For every point:
+        \verbatim
+        if(mask[X, Y] == index || mask == 0)
+        {
+            S = src ? src[X, Y] : 1;
+            n += 1.
+            s += S;
+            sx += S*X.
+            sy += S*Y.
+            sxx += S*X*X.
+            sxy += S*X*Y.
+            syy += S*Y*Y.
+        }
+        \endverbatim
+
+        \note This function is a C++ wrapper for function ::SimdGetObjectMoments.
+
+        \param [in] src - an input image.
+        \param [in] mask - a mask image. Can be empty.
+        \param [in] index - an object index.
+        \param [out] n - a reference to unsigned 64-bit integer value with found are of given object.
+        \param [out] s - a reference to unsigned 64-bit integer value with sum of image values of given object.
+        \param [out] sx - a reference to unsigned 64-bit integer value with found first-order moment x of given object.
+        \param [out] sy - a reference to unsigned 64-bit integer value with found first-order moment y of given object.
+        \param [out] sxx - a reference to unsigned 64-bit integer value with found second-order moment xx of given object.
+        \param [out] sxy - a reference to unsigned 64-bit integer value with found second-order moment xy of given object.
+        \param [out] syy - a reference to unsigned 64-bit integer value with found second-order moment yy of given object.
+    */
+    template<template<class> class A> SIMD_INLINE void GetObjectMoments(const View<A> & src, const View<A> & mask, uint8_t index, uint64_t & n, uint64_t & s, uint64_t & sx, uint64_t & sy, uint64_t & sxx, uint64_t & sxy, uint64_t & syy)
+    {
+        assert(src.format == View<A>::Empty || src.format == View<A>::Gray8);
+        assert(mask.format == View<A>::Empty || mask.format == View<A>::Gray8);
+        assert(src.format == View<A>::Gray8 || mask.format == View<A>::Gray8);
+        assert(src.format == mask.format ? EqualSize(src, mask) : true);
+
+        if (src.format)
+            SimdGetObjectMoments(src.data, src.stride, src.width, src.height, mask.data, mask.stride, index, &n, &s, &sx, &sy, &sxx, &sxy, &syy);
+        else
+            SimdGetObjectMoments(src.data, src.stride, mask.width, mask.height, mask.data, mask.stride, index, &n, &s, &sx, &sy, &sxx, &sxy, &syy);
+    }
+
     /*! @ingroup row_statistic
 
         \fn void GetRowSums(const View<A>& src, uint32_t * sums)
@@ -3350,8 +3595,8 @@ namespace Simd
 
         SimdSquareSum(src.data, src.stride, src.width, src.height, &sum);
     }
-	
-	    /*! @ingroup other_statistic
+    
+        /*! @ingroup other_statistic
 
         \fn void ValueSquareSum(const View<A>& src, uint64_t & valueSum, uint64_t & squareSum)
 
@@ -3361,7 +3606,7 @@ namespace Simd
 
         \param [in] src - an input image.
         \param [out] valueSum - a result value sum.
-		\param [out] squareSum - a result square sum.
+        \param [out] squareSum - a result square sum.
     */
     template<template<class> class A> SIMD_INLINE void ValueSquareSum(const View<A>& src, uint64_t & valueSum, uint64_t & squareSum)
     {
@@ -3413,6 +3658,37 @@ namespace Simd
         assert(src.width * 2 == dst.width && src.height * 2 == dst.height);
 
         SimdStretchGray2x2(src.data, src.width, src.height, src.stride, dst.data, dst.width, dst.height, dst.stride);
+    }
+
+    /*! @ingroup synet_conversion
+
+        \fn void SynetSetInput(const View<A> & src, const float * lower, const float * upper, float * dst, size_t channels, SimdTensorFormatType format)
+
+        \short Sets image to the input of neural network of <a href="http://github.com/ermig1979/Synet">Synet Framework</a>.
+
+        Algorithm's details (example for BGRA pixel format and NCHW tensor format):
+        \verbatim
+        for(c = 0; c < channels; ++c)
+            for(y = 0; y < src.height; ++y)
+                for(x = 0; x < src.width; ++x)
+                    dst[(c*height + y)*width + x] = src.data[src.stride*y + src.width*4 + c]*(upper[c] - lower[c])/255 + lower[c];
+        \endverbatim
+
+        \note This function is a C++ wrapper for function ::SimdSynetSetInput.
+
+        \param [in] src - an input image.There are supported following image formats: View<A>::Gray8, View<A>::Bgr24, View<A>::Bgra32, View<A>::Rgb24.
+        \param [in] lower - a pointer to the array with lower bound of values of the output tensor. The size of the array have to correspond number of channels in the output image tensor.
+        \param [in] upper - a pointer to the array with upper bound of values of the output tensor. The size of the array have to correspond number of channels in the output image tensor.
+        \param [out] dst - a pointer to the output 32-bit float image tensor.
+        \param [in] channels - a number of channels in the output image tensor. It can be 1 or 3.
+        \param [in] format - a format of output image tensor. There are supported following tensor formats: ::SimdTensorFormatNchw, ::SimdTensorFormatNhwc.
+    */
+    template<template<class> class A> SIMD_INLINE void SynetSetInput(const View<A> & src, const float * lower, const float * upper, float * dst, size_t channels, SimdTensorFormatType format)
+    {
+        assert(src.format == View<A>::Gray8 || src.format == View<A>::Bgr24 || src.format == View<A>::Bgra32 || src.format == View<A>::Rgb24);
+        assert(format == SimdTensorFormatNchw || format == SimdTensorFormatNhwc);
+
+        SimdSynetSetInput(src.data, src.width, src.height, src.stride, (SimdPixelFormatType)src.format, lower, upper, dst, channels, format);
     }
 
     /*! @ingroup texture_estimation
@@ -3848,6 +4124,80 @@ namespace Simd
         SimdYuv444pToHue(y.data, y.stride, u.data, u.stride, v.data, v.stride, y.width, y.height, hue.data, hue.stride);
     }
 
+    /*! @ingroup yuv_conversion
+
+        \fn void Yuv420pToRgb(const View<A>& y, const View<A>& u, const View<A>& v, View<A>& rgb)
+
+        \short Converts YUV420P image to 24-bit RGB image.
+
+        The input Y and output RGB images must have the same width and height.
+        The input U and V images must have the same width and height (half size relative to Y component).
+
+        \note This function is a C++ wrapper for function ::SimdYuv420pToRgb.
+
+        \param [in] y - an input 8-bit image with Y color plane.
+        \param [in] u - an input 8-bit image with U color plane.
+        \param [in] v - an input 8-bit image with V color plane.
+        \param [out] rgb - an output 24-bit RGB image.
+    */
+    template<template<class> class A> SIMD_INLINE void Yuv420pToRgb(const View<A>& y, const View<A>& u, const View<A>& v, View<A>& rgb)
+    {
+        assert(y.width == 2 * u.width && y.height == 2 * u.height && y.format == u.format);
+        assert(y.width == 2 * v.width && y.height == 2 * v.height && y.format == v.format);
+        assert(y.width == rgb.width && y.height == rgb.height);
+        assert(y.format == View<A>::Gray8 && rgb.format == View<A>::Rgb24);
+
+        SimdYuv420pToRgb(y.data, y.stride, u.data, u.stride, v.data, v.stride, y.width, y.height, rgb.data, rgb.stride);
+    }
+
+    /*! @ingroup yuv_conversion
+
+        \fn void Yuv422pToRgb(const View<A>& y, const View<A>& u, const View<A>& v, View<A>& rgb)
+
+        \short Converts YUV422P image to 24-bit RGB image.
+
+        The input Y and output RGB images must have the same width and height.
+        The input U and V images must have the same width and height (their width is equal to half width of Y component).
+
+        \note This function is a C++ wrapper for function ::SimdYuv422pToRgb.
+
+        \param [in] y - an input 8-bit image with Y color plane.
+        \param [in] u - an input 8-bit image with U color plane.
+        \param [in] v - an input 8-bit image with V color plane.
+        \param [out] rgb - an output 24-bit RGB image.
+    */
+    template<template<class> class A> SIMD_INLINE void Yuv422pToRgb(const View<A>& y, const View<A>& u, const View<A>& v, View<A>& rgb)
+    {
+        assert(y.width == 2 * u.width && y.height == u.height && y.format == u.format);
+        assert(y.width == 2 * v.width && y.height == v.height && y.format == v.format);
+        assert(y.width == rgb.width && y.height == rgb.height);
+        assert(y.format == View<A>::Gray8 && rgb.format == View<A>::Rgb24);
+
+        SimdYuv422pToRgb(y.data, y.stride, u.data, u.stride, v.data, v.stride, y.width, y.height, rgb.data, rgb.stride);
+    }
+
+    /*! @ingroup yuv_conversion
+
+        \fn void Yuv444pToRgb(const View<A>& y, const View<A>& u, const View<A>& v, View<A>& rgb)
+
+        \short Converts YUV444P image to 24-bit RGB image.
+
+        The input Y, U, V and output RGB images must have the same width and height.
+
+        \note This function is a C++ wrapper for function ::SimdYuv444pToRgb.
+
+        \param [in] y - an input 8-bit image with Y color plane.
+        \param [in] u - an input 8-bit image with U color plane.
+        \param [in] v - an input 8-bit image with V color plane.
+        \param [out] rgb - an output 24-bit RGB image.
+    */
+    template<template<class> class A> SIMD_INLINE void Yuv444pToRgb(const View<A>& y, const View<A>& u, const View<A>& v, View<A>& rgb)
+    {
+        assert(Compatible(y, u, v) && EqualSize(y, rgb) && y.format == View<A>::Gray8 && rgb.format == View<A>::Rgb24);
+
+        SimdYuv444pToRgb(y.data, y.stride, u.data, u.stride, v.data, v.stride, y.width, y.height, rgb.data, rgb.stride);
+    }
+
     /*! @ingroup universal_conversion
 
         \fn void Convert(const View<A> & src, View<A> & dst)
@@ -3856,7 +4206,7 @@ namespace Simd
 
         The input and output images must have the same width and height.
 
-        \note This function supports conversion between Gray8, Bgr24 and Bgra32 image formats.
+        \note This function supports conversion between Gray8, Bgr24, Bgra32 and Rgb24 image formats.
 
         \param [in] src - an input image.
         \param [out] dst - an output image.
@@ -3880,6 +4230,7 @@ namespace Simd
                 GrayToBgra(src, dst);
                 break;
             case View<A>::Bgr24:
+            case View<A>::Rgb24:
                 GrayToBgr(src, dst);
                 break;
             default:
@@ -3896,6 +4247,26 @@ namespace Simd
             case View<A>::Gray8:
                 BgrToGray(src, dst);
                 break;
+            case View<A>::Rgb24:
+                BgrToRgb(src, dst);
+                break;
+            default:
+                assert(0);
+            }
+            break;
+
+        case View<A>::Rgb24:
+            switch (dst.format)
+            {
+            case View<A>::Bgra32:
+                RgbToBgra(src, dst);
+                break;
+            case View<A>::Bgr24:
+                BgrToRgb(src, dst);
+                break;
+            case View<A>::Gray8:
+                RgbToGray(src, dst);
+                break;
             default:
                 assert(0);
             }
@@ -3909,6 +4280,9 @@ namespace Simd
                 break;
             case View<A>::Gray8:
                 BgraToGray(src, dst);
+                break;
+            case View<A>::Rgb24:
+                BgraToRgb(src, dst);
                 break;
             default:
                 assert(0);

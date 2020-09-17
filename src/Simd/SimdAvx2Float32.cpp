@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,7 @@ namespace Simd
             __m256i d1 = Float32ToUint8<align>(src + F * 1, lower, upper, boost);
             __m256i d2 = Float32ToUint8<align>(src + F * 2, lower, upper, boost);
             __m256i d3 = Float32ToUint8<align>(src + F * 3, lower, upper, boost);
-            Store<align>((__m256i*)dst, PackU16ToU8(PackU32ToI16(d0, d1), PackU32ToI16(d2, d3)));
+            Store<align>((__m256i*)dst, PackI16ToU8(PackU32ToI16(d0, d1), PackU32ToI16(d2, d3)));
         }
 
         template <bool align> void Float32ToUint8(const float * src, size_t size, const float * lower, const float * upper, uint8_t * dst)

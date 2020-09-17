@@ -1,7 +1,7 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar,
+* Copyright (c) 2011-2020 Yermalayeu Ihar,
 *               2014-2016 Antonenka Mikhail.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,13 +30,13 @@ namespace Test
 {
     namespace
     {
-        struct Func
+        struct FuncO
         {
             typedef void(*FuncPtr)(const uint8_t * src, size_t width, size_t height, size_t srcStride, uint8_t * dst, size_t dstStride);
             FuncPtr func;
             String description;
 
-            Func(const FuncPtr & f, const String & d) : func(f), description(d) {}
+            FuncO(const FuncPtr & f, const String & d) : func(f), description(d) {}
 
             void Call(const View & src, View & dst) const
             {
@@ -46,9 +46,29 @@ namespace Test
         };
     }
 
-#define FUNC(func) Func(func, #func)
+#define FUNC_O(func) FuncO(func, #func)
 
-    bool AnyToAnyAutoTest(int width, int height, View::Format srcType, View::Format dstType, const Func & f1, const Func & f2)
+    namespace
+    {
+        struct FuncN
+        {
+            typedef void(*FuncPtr)(const uint8_t * src, size_t srcStride, size_t width, size_t height, uint8_t * dst, size_t dstStride);
+            FuncPtr func;
+            String description;
+
+            FuncN(const FuncPtr & f, const String & d) : func(f), description(d) {}
+
+            void Call(const View & src, View & dst) const
+            {
+                TEST_PERFORMANCE_TEST(description);
+                func(src.data, src.stride, src.width, src.height, dst.data, dst.stride);
+            }
+        };
+    }
+
+#define FUNC_N(func) FuncN(func, #func)
+
+    template<class Func> bool AnyToAnyAutoTest(int width, int height, View::Format srcType, View::Format dstType, const Func & f1, const Func & f2)
     {
         bool result = true;
 
@@ -56,6 +76,7 @@ namespace Test
 
         View src(width, height, srcType, NULL, TEST_ALIGN(width));
         FillRandom(src);
+        //FillSequence(src);
 
         View dst1(width, height, dstType, NULL, TEST_ALIGN(width));
         View dst2(width, height, dstType, NULL, TEST_ALIGN(width));
@@ -69,7 +90,7 @@ namespace Test
         return result;
     }
 
-    bool AnyToAnyAutoTest(View::Format srcType, View::Format dstType, const Func & f1, const Func & f2)
+    template<class Func> bool AnyToAnyAutoTest(View::Format srcType, View::Format dstType, const Func & f1, const Func & f2)
     {
         bool result = true;
 
@@ -83,26 +104,31 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC(Simd::Base::BgraToBgr), FUNC(SimdBgraToBgr));
+        result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Base::BgraToBgr), FUNC_O(SimdBgraToBgr));
 
 #ifdef SIMD_SSSE3_ENABLE
         if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC(Simd::Ssse3::BgraToBgr), FUNC(SimdBgraToBgr));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Ssse3::BgraToBgr), FUNC_O(SimdBgraToBgr));
+#endif 
+
+#ifdef SIMD_AVX2_ENABLE
+        if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Avx2::BgraToBgr), FUNC_O(SimdBgraToBgr));
 #endif 
 
 #ifdef SIMD_AVX512BW_ENABLE
         if (Simd::Avx512bw::Enable)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC(Simd::Avx512bw::BgraToBgr), FUNC(SimdBgraToBgr));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Avx512bw::BgraToBgr), FUNC_O(SimdBgraToBgr));
 #endif 
 
 #ifdef SIMD_VMX_ENABLE
         if (Simd::Vmx::Enable && W >= Simd::Vmx::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC(Simd::Vmx::BgraToBgr), FUNC(SimdBgraToBgr));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Vmx::BgraToBgr), FUNC_O(SimdBgraToBgr));
 #endif 
 
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable && W >= Simd::Neon::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC(Simd::Neon::BgraToBgr), FUNC(SimdBgraToBgr));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Neon::BgraToBgr), FUNC_O(SimdBgraToBgr));
 #endif 
 
         return result;
@@ -112,32 +138,61 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC(Simd::Base::BgraToGray), FUNC(SimdBgraToGray));
+        result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC_O(Simd::Base::BgraToGray), FUNC_O(SimdBgraToGray));
 
 #ifdef SIMD_SSE2_ENABLE
         if (Simd::Sse2::Enable && W >= Simd::Sse2::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC(Simd::Sse2::BgraToGray), FUNC(SimdBgraToGray));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC_O(Simd::Sse2::BgraToGray), FUNC_O(SimdBgraToGray));
 #endif 
 
 #ifdef SIMD_AVX2_ENABLE
         if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC(Simd::Avx2::BgraToGray), FUNC(SimdBgraToGray));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC_O(Simd::Avx2::BgraToGray), FUNC_O(SimdBgraToGray));
 #endif 
 
 #ifdef SIMD_AVX512BW_ENABLE
         if (Simd::Avx512bw::Enable)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC(Simd::Avx512bw::BgraToGray), FUNC(SimdBgraToGray));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC_O(Simd::Avx512bw::BgraToGray), FUNC_O(SimdBgraToGray));
 #endif 
 
 #ifdef SIMD_VMX_ENABLE
         if (Simd::Vmx::Enable && W >= Simd::Vmx::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC(Simd::Vmx::BgraToGray), FUNC(SimdBgraToGray));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC_O(Simd::Vmx::BgraToGray), FUNC_O(SimdBgraToGray));
 #endif 
 
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable && W >= Simd::Neon::A)
-            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC(Simd::Neon::BgraToGray), FUNC(SimdBgraToGray));
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Gray8, FUNC_O(Simd::Neon::BgraToGray), FUNC_O(SimdBgraToGray));
 #endif 
+
+        return result;
+    }
+
+    bool BgraToRgbAutoTest()
+    {
+        bool result = true;
+
+        result = result && AnyToAnyAutoTest(View::Bgra32, View::Bgr24, FUNC_O(Simd::Base::BgraToRgb), FUNC_O(SimdBgraToRgb));
+
+#ifdef SIMD_SSSE3_ENABLE
+        if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Rgb24, FUNC_O(Simd::Ssse3::BgraToRgb), FUNC_O(SimdBgraToRgb));
+#endif 
+
+#ifdef SIMD_AVX2_ENABLE
+        if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Rgb24, FUNC_O(Simd::Avx2::BgraToRgb), FUNC_O(SimdBgraToRgb));
+#endif 
+
+#ifdef SIMD_AVX512BW_ENABLE
+        if (Simd::Avx512bw::Enable)
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Rgb24, FUNC_O(Simd::Avx512bw::BgraToRgb), FUNC_O(SimdBgraToRgb));
+#endif 
+
+#ifdef SIMD_NEON_ENABLE
+        if (Simd::Neon::Enable && W >= Simd::Neon::A)
+            result = result && AnyToAnyAutoTest(View::Bgra32, View::Rgb24, FUNC_O(Simd::Neon::BgraToRgb), FUNC_O(SimdBgraToRgb));
+#endif
 
         return result;
     }
@@ -146,36 +201,36 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Base::BgrToGray), FUNC(SimdBgrToGray));
+        result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Base::BgrToGray), FUNC_O(SimdBgrToGray));
 
 #ifdef SIMD_SSE2_ENABLE
         if (Simd::Sse2::Enable && W >= Simd::Sse2::A)
-            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Sse2::BgrToGray), FUNC(SimdBgrToGray));
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Sse2::BgrToGray), FUNC_O(SimdBgrToGray));
 #endif 
 
 #ifdef SIMD_SSSE3_ENABLE
         if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
-            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Ssse3::BgrToGray), FUNC(SimdBgrToGray));
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Ssse3::BgrToGray), FUNC_O(SimdBgrToGray));
 #endif 
 
 #if defined(SIMD_AVX2_ENABLE) && !defined(SIMD_CLANG_AVX2_BGR_TO_BGRA_ERROR)
         if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
-            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Avx2::BgrToGray), FUNC(SimdBgrToGray));
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Avx2::BgrToGray), FUNC_O(SimdBgrToGray));
 #endif 
 
 #ifdef SIMD_AVX512BW_ENABLE
         if (Simd::Avx512bw::Enable)
-            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Avx512bw::BgrToGray), FUNC(SimdBgrToGray));
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Avx512bw::BgrToGray), FUNC_O(SimdBgrToGray));
 #endif 
 
 #ifdef SIMD_VMX_ENABLE
         if (Simd::Vmx::Enable && W >= Simd::Vmx::A)
-            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Vmx::BgrToGray), FUNC(SimdBgrToGray));
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Vmx::BgrToGray), FUNC_O(SimdBgrToGray));
 #endif 
 
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable && W >= Simd::Neon::A)
-            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC(Simd::Neon::BgrToGray), FUNC(SimdBgrToGray));
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Gray8, FUNC_O(Simd::Neon::BgrToGray), FUNC_O(SimdBgrToGray));
 #endif
 
         return result;
@@ -185,7 +240,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Bgr24, View::Hsl24, FUNC(Simd::Base::BgrToHsl), FUNC(SimdBgrToHsl));
+        result = result && AnyToAnyAutoTest(View::Bgr24, View::Hsl24, FUNC_O(Simd::Base::BgrToHsl), FUNC_O(SimdBgrToHsl));
 
         return result;
     }
@@ -194,7 +249,36 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Bgr24, View::Hsv24, FUNC(Simd::Base::BgrToHsv), FUNC(SimdBgrToHsv));
+        result = result && AnyToAnyAutoTest(View::Bgr24, View::Hsv24, FUNC_O(Simd::Base::BgrToHsv), FUNC_O(SimdBgrToHsv));
+
+        return result;
+    }
+
+    bool BgrToRgbAutoTest()
+    {
+        bool result = true;
+
+        result = result && AnyToAnyAutoTest(View::Bgr24, View::Rgb24, FUNC_N(Simd::Base::BgrToRgb), FUNC_N(SimdBgrToRgb));
+
+#ifdef SIMD_SSSE3_ENABLE
+        if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Rgb24, FUNC_N(Simd::Ssse3::BgrToRgb), FUNC_N(SimdBgrToRgb));
+#endif 
+
+#ifdef SIMD_AVX2_ENABLE
+        if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Rgb24, FUNC_N(Simd::Avx2::BgrToRgb), FUNC_N(SimdBgrToRgb));
+#endif 
+
+#ifdef SIMD_AVX512BW_ENABLE
+        if (Simd::Avx512bw::Enable)
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Rgb24, FUNC_N(Simd::Avx512bw::BgrToRgb), FUNC_N(SimdBgrToRgb));
+#endif 
+
+#ifdef SIMD_NEON_ENABLE
+        if (Simd::Neon::Enable && W >= Simd::Neon::A)
+            result = result && AnyToAnyAutoTest(View::Bgr24, View::Rgb24, FUNC_N(Simd::Neon::BgrToRgb), FUNC_N(SimdBgrToRgb));
+#endif
 
         return result;
     }
@@ -203,31 +287,31 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC(Simd::Base::GrayToBgr), FUNC(SimdGrayToBgr));
+        result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC_O(Simd::Base::GrayToBgr), FUNC_O(SimdGrayToBgr));
 
 #ifdef SIMD_SSSE3_ENABLE
         if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
-            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC(Simd::Ssse3::GrayToBgr), FUNC(SimdGrayToBgr));
+            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC_O(Simd::Ssse3::GrayToBgr), FUNC_O(SimdGrayToBgr));
 #endif 
 
 #ifdef SIMD_AVX2_ENABLE
         if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
-            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC(Simd::Avx2::GrayToBgr), FUNC(SimdGrayToBgr));
+            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC_O(Simd::Avx2::GrayToBgr), FUNC_O(SimdGrayToBgr));
 #endif 
 
 #ifdef SIMD_AVX512BW_ENABLE
         if (Simd::Avx512bw::Enable)
-            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC(Simd::Avx512bw::GrayToBgr), FUNC(SimdGrayToBgr));
+            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC_O(Simd::Avx512bw::GrayToBgr), FUNC_O(SimdGrayToBgr));
 #endif
 
 #ifdef SIMD_VMX_ENABLE
         if (Simd::Vmx::Enable && W >= Simd::Vmx::A)
-            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC(Simd::Vmx::GrayToBgr), FUNC(SimdGrayToBgr));
+            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC_O(Simd::Vmx::GrayToBgr), FUNC_O(SimdGrayToBgr));
 #endif 
 
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable && W >= Simd::Neon::A)
-            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC(Simd::Neon::GrayToBgr), FUNC(SimdGrayToBgr));
+            result = result && AnyToAnyAutoTest(View::Gray8, View::Bgr24, FUNC_O(Simd::Neon::GrayToBgr), FUNC_O(SimdGrayToBgr));
 #endif 
 
         return result;
@@ -237,34 +321,63 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC(Simd::Base::Int16ToGray), FUNC(SimdInt16ToGray));
+        result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC_O(Simd::Base::Int16ToGray), FUNC_O(SimdInt16ToGray));
 
 #ifdef SIMD_SSE2_ENABLE
         if (Simd::Sse2::Enable && W >= Simd::Sse2::A)
-            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC(Simd::Sse2::Int16ToGray), FUNC(SimdInt16ToGray));
+            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC_O(Simd::Sse2::Int16ToGray), FUNC_O(SimdInt16ToGray));
 #endif 
 
 #ifdef SIMD_AVX2_ENABLE
         if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
-            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC(Simd::Avx2::Int16ToGray), FUNC(SimdInt16ToGray));
+            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC_O(Simd::Avx2::Int16ToGray), FUNC_O(SimdInt16ToGray));
 #endif 
 
 #ifdef SIMD_AVX512BW_ENABLE
         if (Simd::Avx512bw::Enable)
-            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC(Simd::Avx512bw::Int16ToGray), FUNC(SimdInt16ToGray));
+            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC_O(Simd::Avx512bw::Int16ToGray), FUNC_O(SimdInt16ToGray));
 #endif 
 
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable && W >= Simd::Neon::A)
-            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC(Simd::Neon::Int16ToGray), FUNC(SimdInt16ToGray));
+            result = result && AnyToAnyAutoTest(View::Int16, View::Gray8, FUNC_O(Simd::Neon::Int16ToGray), FUNC_O(SimdInt16ToGray));
 #endif 
+
+        return result;
+    }
+
+    bool RgbToGrayAutoTest()
+    {
+        bool result = true;
+
+        result = result && AnyToAnyAutoTest(View::Rgb24, View::Gray8, FUNC_O(Simd::Base::RgbToGray), FUNC_O(SimdRgbToGray));
+
+#ifdef SIMD_SSSE3_ENABLE
+        if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
+            result = result && AnyToAnyAutoTest(View::Rgb24, View::Gray8, FUNC_O(Simd::Ssse3::RgbToGray), FUNC_O(SimdRgbToGray));
+#endif 
+
+#if defined(SIMD_AVX2_ENABLE) && !defined(SIMD_CLANG_AVX2_BGR_TO_BGRA_ERROR)
+        if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
+            result = result && AnyToAnyAutoTest(View::Rgb24, View::Gray8, FUNC_O(Simd::Avx2::RgbToGray), FUNC_O(SimdRgbToGray));
+#endif 
+
+#ifdef SIMD_AVX512BW_ENABLE
+        if (Simd::Avx512bw::Enable)
+            result = result && AnyToAnyAutoTest(View::Rgb24, View::Gray8, FUNC_O(Simd::Avx512bw::RgbToGray), FUNC_O(SimdRgbToGray));
+#endif 
+
+#ifdef SIMD_NEON_ENABLE
+        if (Simd::Neon::Enable && W >= Simd::Neon::A)
+            result = result && AnyToAnyAutoTest(View::Rgb24, View::Gray8, FUNC_O(Simd::Neon::RgbToGray), FUNC_O(SimdRgbToGray));
+#endif
 
         return result;
     }
 
     //-----------------------------------------------------------------------
 
-    bool AnyToAnyDataTest(bool create, int width, int height, View::Format srcType, View::Format dstType, const Func & f)
+    template<class Func> bool AnyToAnyDataTest(bool create, int width, int height, View::Format srcType, View::Format dstType, const Func & f)
     {
         bool result = true;
 
@@ -307,7 +420,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgra32, View::Bgr24, FUNC(SimdBgraToBgr));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgra32, View::Bgr24, FUNC_O(SimdBgraToBgr));
 
         return result;
     }
@@ -316,7 +429,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgra32, View::Gray8, FUNC(SimdBgraToGray));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgra32, View::Gray8, FUNC_O(SimdBgraToGray));
 
         return result;
     }
@@ -325,7 +438,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgr24, View::Gray8, FUNC(SimdBgrToGray));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgr24, View::Gray8, FUNC_O(SimdBgrToGray));
 
         return result;
     }
@@ -334,7 +447,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgr24, View::Hsl24, FUNC(SimdBgrToHsl));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgr24, View::Hsl24, FUNC_O(SimdBgrToHsl));
 
         return result;
     }
@@ -343,7 +456,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgr24, View::Hsv24, FUNC(SimdBgrToHsv));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Bgr24, View::Hsv24, FUNC_O(SimdBgrToHsv));
 
         return result;
     }
@@ -352,7 +465,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Gray8, View::Bgr24, FUNC(SimdGrayToBgr));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Gray8, View::Bgr24, FUNC_O(SimdGrayToBgr));
 
         return result;
     }
@@ -361,7 +474,7 @@ namespace Test
     {
         bool result = true;
 
-        result = result && AnyToAnyDataTest(create, DW, DH, View::Int16, View::Gray8, FUNC(SimdInt16ToGray));
+        result = result && AnyToAnyDataTest(create, DW, DH, View::Int16, View::Gray8, FUNC_O(SimdInt16ToGray));
 
         return result;
     }

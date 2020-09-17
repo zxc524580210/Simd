@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar,
+* Copyright (c) 2011-2020 Yermalayeu Ihar,
 *               2018-2018 Radchenko Andrey.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -253,28 +253,6 @@ namespace Simd
                 AddValue<false>(value, dst, aligned, partial, size);
         }
 
-        template<bool align> void NeuralSigmoid(const float * src, size_t size, const float * slope, float * dst)
-        {
-            if (align)
-                assert(Aligned(src) && Aligned(dst));
-
-            Exp exp(-slope[0]);
-            size_t alignedSize = AlignLo(size, F);
-            size_t i = 0;
-            for (; i < alignedSize; i += F)
-                Store<align>(dst + i, exp.Sigmoid<1>(Load<align>(src + i)));
-            for (; i < size; ++i)
-                dst[i] = Base::Sigmoid(src[i] * slope[0]);
-        }
-
-        void NeuralSigmoid(const float * src, size_t size, const float * slope, float * dst)
-        {
-            if (Aligned(src) && Aligned(dst))
-                NeuralSigmoid<true>(src, size, slope, dst);
-            else
-                NeuralSigmoid<false>(src, size, slope, dst);
-        }
-
         template <bool align> SIMD_INLINE void NeuralRoughSigmoid(const float * src, size_t size, const float * slope, float * dst)
         {
             if (align)
@@ -381,28 +359,6 @@ namespace Simd
                 NeuralDerivativeSigmoid<false>(src, size, slope, dst);
         }
 
-        template<bool align> void NeuralTanh(const float * src, size_t size, const float * slope, float * dst)
-        {
-            if (align)
-                assert(Aligned(src) && Aligned(dst));
-
-            Exp exp(-2.0f*slope[0]);
-            size_t alignedSize = AlignLo(size, F);
-            size_t i = 0;
-            for (; i < alignedSize; i += F)
-                Store<align>(dst + i, exp.Tanh<1>(Load<align>(src + i)));
-            for (; i < size; ++i)
-                dst[i] = Base::Tanh(src[i] * slope[0]);
-        }
-
-        void NeuralTanh(const float * src, size_t size, const float * slope, float * dst)
-        {
-            if (Aligned(src) && Aligned(dst))
-                NeuralTanh<true>(src, size, slope, dst);
-            else
-                NeuralTanh<false>(src, size, slope, dst);
-        }
-
         template <bool align> SIMD_INLINE void NeuralRoughTanh(const float * src, size_t size, const float * slope, float * dst)
         {
             if (align)
@@ -486,47 +442,6 @@ namespace Simd
                 NeuralPow<true>(src, size, exponent, dst);
             else
                 NeuralPow<false>(src, size, exponent, dst);
-        }
-
-        template <bool align> SIMD_INLINE void NeuralRelu(const float * src, size_t size, const float * slope, float * dst)
-        {
-            if (align)
-                assert(Aligned(src) && Aligned(dst));
-            float s = slope[0];
-            size_t alignedSize = Simd::AlignLo(size, F);
-            size_t i = 0;
-            float32x4_t _0 = vdupq_n_f32(0.0f);
-            if (s == 0)
-            {
-                for (; i < alignedSize; i += F)
-                {
-                    float32x4_t _src = Load<align>(src + i);
-                    float32x4_t relu = vmaxq_f32(_0, _src);
-                    Store<align>(dst + i, relu);
-                }
-                for (; i < size; ++i)
-                    dst[i] = Simd::Max(0.0f, src[i]);
-            }
-            else
-            {
-                float32x4_t _s = vdupq_n_f32(s);
-                for (; i < alignedSize; i += F)
-                {
-                    float32x4_t _src = Load<align>(src + i);
-                    float32x4_t relu = vaddq_f32(vmaxq_f32(_0, _src), vmulq_f32(_s, vminq_f32(_0, _src)));
-                    Store<align>(dst + i, relu);
-                }
-                for (; i < size; ++i)
-                    dst[i] = Simd::Max(0.0f, src[i]) + s * Simd::Min(src[i], 0.0f);
-            }
-        }
-
-        void NeuralRelu(const float * src, size_t size, const float * slope, float * dst)
-        {
-            if (Aligned(src) && Aligned(dst))
-                NeuralRelu<true>(src, size, slope, dst);
-            else
-                NeuralRelu<false>(src, size, slope, dst);
         }
 
         template <bool align> void NeuralDerivativeRelu(const float * src, size_t size, const float * slope, float * dst)
@@ -911,7 +826,7 @@ namespace Simd
         template <bool align, size_t coreX, size_t coreY> void NeuralAddConvolutionForward(const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride)
         {
             size_t alignedWidth = AlignLo(width, F);
-            float32x4_t tailMask = RightNotZero(width - alignedWidth);
+            float32x4_t tailMask = RightNotZero32f(width - alignedWidth);
             float32x4_t _weights[coreX*coreY];
             LoadWeightsForward<coreX*coreY>(weights, _weights);
             for (size_t row = 0; row < height; ++row)
@@ -1070,7 +985,7 @@ namespace Simd
                     size_t M3 = M / 3 * 3;
                     size_t N4 = Simd::AlignLo(N, 4);
                     size_t K4 = Simd::AlignLo(K, 4);
-                    float32x4_t tailMask = RightNotZero(K - K4);
+                    float32x4_t tailMask = RightNotZero32f(K - K4);
                     size_t i = 0;
                     for (; i < M3; i += 3)
                     {
@@ -1566,7 +1481,7 @@ namespace Simd
                     const float * weight, float * dst, size_t dstWidth, size_t dstHeight, size_t dstDepth)
                 {
                     size_t alignedWidth = AlignLo(dstWidth, F);
-                    float32x4_t tailMask = RightNotZero(dstWidth - alignedWidth);
+                    float32x4_t tailMask = RightNotZero32f(dstWidth - alignedWidth);
                     float32x4_t _weight[kernelX*kernelY];
                     for (size_t srcChannel = 0; srcChannel < srcDepth; ++srcChannel)
                     {
@@ -1824,7 +1739,7 @@ namespace Simd
             height += coreY - 1;
             width += coreX - 1;
             size_t alignedWidth = AlignLo(width, F);
-            float32x4_t tailMask = RightNotZero(width - alignedWidth);
+            float32x4_t tailMask = RightNotZero32f(width - alignedWidth);
             float32x4_t _weights[coreX*coreY];
             LoadWeightsBackward<coreX*coreY>(weights, _weights);
 
@@ -1892,7 +1807,7 @@ namespace Simd
         template <bool align, size_t coreX, size_t coreY> SIMD_INLINE void NeuralAddConvolutionSum(const float * src, size_t srcStride, const float * dst, size_t dstStride, size_t width, size_t height, float * sums)
         {
             size_t alignedWidth = Simd::AlignLo(width, F);
-            float32x4_t tailMask = RightNotZero(width - alignedWidth);
+            float32x4_t tailMask = RightNotZero32f(width - alignedWidth);
             float32x4_t _sums[coreX*coreY];
             memset(_sums, 0, sizeof(_sums));
             for (size_t row = 0; row < height; ++row)

@@ -1,7 +1,7 @@
 Introduction
 ============
 
-The [Simd Library](http://ermig1979.github.io/Simd) is a free open source image processing library, designed for C and C++ programmers. 
+The [Simd Library](http://ermig1979.github.io/Simd) is a free open source image processing and machine learning library, designed for C and C++ programmers. 
 It provides many useful high performance algorithms for image processing such as: 
 pixel format conversion, image scaling and filtration, extraction of statistic information from images, motion detection,
 object detection (HAAR and LBP classifier cascades) and classification, neural network.
@@ -22,11 +22,11 @@ The Simd Library has next folder's structure:
 * `simd/src/Simd/` - contains source codes of the library.
 * `simd/src/Test/` - contains test framework of the library.
 * `simd/src/Use/` - contains the use examples of the library.
-* `simd/prj/vs2012/` - contains project files of Microsoft Visual Studio 2012.
 * `simd/prj/vs2013/` - contains project files of Microsoft Visual Studio 2013.
 * `simd/prj/vs2015/` - contains project files of Microsoft Visual Studio 2015.
 * `simd/prj/vs2017w/` - contains project files of Microsoft Visual Studio 2017 (for Windows).
 * `simd/prj/vs2017a/` - contains project files of Microsoft Visual Studio 2017 (for Android).
+* `simd/prj/vs2019/` - contains project files of Microsoft Visual Studio 2019.
 * `simd/prj/cmd/` - contains additional scripts needed for building of the library in Windows.
 * `simd/prj/cmake/` - contains files of CMake build systems.
 * `simd/prj/sh/` - contains additional scripts needed for building of the library in Linux.
@@ -39,7 +39,7 @@ The Simd Library has next folder's structure:
 The library building for Windows
 ================================
 
-To build the library and test application for Windows 32/64 you need to use Microsoft Visual Studio 2015 (or 2012/2013/2017). 
+To build the library and test application for Windows 32/64 you need to use Microsoft Visual Studio 2019 (or 2013/2015/2017). 
 The project files are in the directory: 
 
 `simd/prj/vs2015/`
@@ -167,9 +167,11 @@ Also you can use parameters:
 * `-help` or `-?` in order to print help message.
 * `-r=../..` to set project root directory.
 * `-pa=1` to print alignment statistics.
-* `-w=1920` width of test image for performance testing.
-* `-h=1080` height of test image for performance testing.
+* `-c=512` a number of channels in test image for performance testing.
+* `-h=1080` a height of test image for performance testing.
+* `-w=1920` a width of test image for performance testing.
 * `-oh=log.html` - a file name with test report (in HTML file format).	
 * `-s=sample.avi` a video source (See `Simd::Motion` test).
 * `-wt=1` a thread number used to parallelize algorithms.
 * `-fe=Abs` an exclude filter to exclude some tests.
+* `-mt=100` a minimal test execution time (in milliseconds).

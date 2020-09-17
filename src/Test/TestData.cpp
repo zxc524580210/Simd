@@ -1,7 +1,7 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2017 Yermalayeu Ihar.
+* Copyright (c) 2011-2019 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -50,6 +50,16 @@ namespace Test
             }
         }
 #else
+#if _MSVC_LANG >= 201703L
+        if (!std::filesystem::exists(std::filesystem::path(path)))
+        {
+            if (!std::filesystem::create_directories(std::filesystem::path(path)))
+            {
+                TEST_LOG_SS(Error, "Can't create path '" << path << "'!");
+                return false;
+            }
+        }
+#else
         if (!std::experimental::filesystem::exists(std::experimental::filesystem::path(path)))
         {
             if (!std::experimental::filesystem::create_directories(std::experimental::filesystem::path(path)))
@@ -58,6 +68,7 @@ namespace Test
                 return false;
             }
         }
+#endif
 #endif
         return true;
 #elif defined(__GNUC__)

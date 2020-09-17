@@ -1,9 +1,10 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar,
+* Copyright (c) 2011-2020 Yermalayeu Ihar,
 *               2014-2018 Antonenka Mikhail,
-*               2018-2018 Radchenko Andrey.
+*               2018-2018 Radchenko Andrey,
+*               2019-2019 Facundo Galan.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +25,10 @@
 * SOFTWARE.
 */
 #include "Simd/SimdConfig.h"
+
+#ifndef SIMD_LIB_CPP
+#define SIMD_LIB_CPP
+#endif
 
 #if defined(WIN32) && !defined(SIMD_STATIC)
 
@@ -52,10 +57,17 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReasonForCall, LPVOID lpReserved)
 #include "Simd/SimdMemory.h"
 #include "Simd/SimdEnable.h"
 #include "Simd/SimdConst.h"
+#include "Simd/SimdCpu.h"
 #include "Simd/SimdLog.h"
+#include "Simd/SimdPerformance.h"
 
 #include "Simd/SimdResizer.h"
-#include "Simd/SimdConvolution.h"
+#include "Simd/SimdSynetConvolution8i.h"
+#include "Simd/SimdSynetConvolution32f.h"
+#include "Simd/SimdSynetDeconvolution32f.h"
+#include "Simd/SimdSynetMergedConvolution32f.h"
+#include "Simd/SimdSynetMergedConvolution8i.h"
+#include "Simd/SimdSynetScale8i.h"
 
 #include "Simd/SimdBase.h"
 #include "Simd/SimdSse1.h"
@@ -68,19 +80,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReasonForCall, LPVOID lpReserved)
 #include "Simd/SimdAvx2.h"
 #include "Simd/SimdAvx512f.h"
 #include "Simd/SimdAvx512bw.h"
+#include "Simd/SimdAvx512vnni.h"
 #include "Simd/SimdVmx.h"
 #include "Simd/SimdVsx.h"
 #include "Simd/SimdNeon.h"
 #include "Simd/SimdMsa.h"
-
-#ifdef SIMD_PERFORMANCE_STATISTIC
-#include "Simd/SimdPerformance.h"
-
-namespace Simd
-{
-    PerformanceMeasurerStorage PerformanceMeasurerStorage::s_storage;
-}
-#endif//SIMD_PERFORMANCE_STATISTIC
 
 #if !defined(SIMD_VERSION)
 #include "Simd/SimdVersion.h"
@@ -93,52 +97,73 @@ SIMD_API const char * SimdVersion()
 
 using namespace Simd;
 
-SIMD_API int SimdCpuInfo()
+SIMD_API size_t SimdCpuInfo(SimdCpuInfoType type)
 {
-    int info = 0;
+    switch (type)
+    {
+    case SimdCpuInfoSockets: return Cpu::SOCKET_NUMBER;
+    case SimdCpuInfoCores: return Cpu::CORE_NUMBER;
+    case SimdCpuInfoThreads: return Cpu::THREAD_NUMBER;
+    case SimdCpuInfoCacheL1: return Cpu::L1_CACHE_SIZE;
+    case SimdCpuInfoCacheL2: return Cpu::L2_CACHE_SIZE;
+    case SimdCpuInfoCacheL3: return Cpu::L3_CACHE_SIZE;
 #ifdef SIMD_SSE_ENABLE
-    info |= Sse::Enable ? (1 << SimdCpuInfoSse) : 0;
+    case SimdCpuInfoSse: return Sse::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_SSE2_ENABLE
-    info |= Sse2::Enable ? (1 << SimdCpuInfoSse2) : 0;
+    case SimdCpuInfoSse2: return Sse2::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_SSE3_ENABLE
-    info |= Sse3::Enable ? (1 << SimdCpuInfoSse3) : 0;
+    case SimdCpuInfoSse3: return Sse3::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_SSSE3_ENABLE
-    info |= Ssse3::Enable ? (1 << SimdCpuInfoSsse3) : 0;
+    case SimdCpuInfoSsse3: return Ssse3::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_SSE41_ENABLE
-    info |= Sse41::Enable ? (1 << SimdCpuInfoSse41) : 0;
+    case SimdCpuInfoSse41: return Sse41::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_SSE42_ENABLE
-    info |= Sse42::Enable ? (1 << SimdCpuInfoSse42) : 0;
+    case SimdCpuInfoSse42: return Sse42::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_AVX_ENABLE
-    info |= Avx::Enable ? (1 << SimdCpuInfoAvx) : 0;
+    case SimdCpuInfoAvx: return Avx::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_AVX2_ENABLE
-    info |= Avx2::Enable ? (1 << SimdCpuInfoAvx2) : 0;
+    case SimdCpuInfoAvx2: return Avx2::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_AVX512F_ENABLE
-    info |= Avx512f::Enable ? (1 << SimdCpuInfoAvx512f) : 0;
+    case SimdCpuInfoAvx512f: return Avx512f::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_AVX512BW_ENABLE
-    info |= Avx512bw::Enable ? (1 << SimdCpuInfoAvx512bw) : 0;
+    case SimdCpuInfoAvx512bw: return Avx512bw::Enable ? 1 : 0;
+#endif
+#ifdef SIMD_AVX512VNNI_ENABLE
+    case SimdCpuInfoAvx512vnni: return Avx512vnni::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_VMX_ENABLE
-    info |= Vmx::Enable ? (1 << SimdCpuInfoVmx) : 0;
+    case SimdCpuInfoVmx: return Vmx::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_VSX_ENABLE
-    info |= Vsx::Enable ? (1 << SimdCpuInfoVsx) : 0;
+    case SimdCpuInfoVsx: return Vsx::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_NEON_ENABLE
-    info |= Neon::Enable ? (1 << SimdCpuInfoNeon) : 0;
+    case SimdCpuInfoNeon: return Neon::Enable ? 1 : 0;
 #endif
 #ifdef SIMD_MSA_ENABLE
-    info |= Msa::Enable ? (1 << SimdCpuInfoMsa) : 0;
+    case SimdCpuInfoMsa: return Msa::Enable ? 1 : 0;
 #endif
-    return info;
+    default:
+        return 0;
+    }
+}
+
+SIMD_API const char * SimdPerformanceStatistic()
+{
+#if defined(SIMD_PERFORMANCE_STATISTIC) && defined(NDEBUG)
+    return Base::PerformanceMeasurerStorage::s_storage.PerformanceStatistic();
+#else
+    return "";
+#endif
 }
 
 SIMD_API void * SimdAllocate(size_t size, size_t align)
@@ -176,26 +201,30 @@ SIMD_API void SimdSetThreadNumber(size_t threadNumber)
     Base::SetThreadNumber(threadNumber);
 }
 
-SIMD_API SimdBool SimdGetFlushToZero()
+SIMD_API SimdBool SimdGetFastMode()
 {
 #ifdef SIMD_SSE_ENABLE
     if (Sse::Enable)
-        return Sse::GetFlushToZero();
+        return Sse::GetFastMode();
     else
 #endif
 #ifdef SIMD_NEON_ENABLE
     if (Neon::Enable)
-        return Neon::GetFlushToZero();
+        return Neon::GetFastMode();
     else
 #endif
         return SimdFalse;
 }
 
-SIMD_API void SimdSetFlushToZero(SimdBool value)
+SIMD_API void SimdSetFastMode(SimdBool value)
 {
 #ifdef SIMD_SSE_ENABLE
     if (Sse::Enable)
-        Sse::SetFlushToZero(value);
+        Sse::SetFastMode(value);
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable)
+        Neon::SetFastMode(value);
 #endif
 }
 
@@ -207,6 +236,17 @@ SIMD_API uint32_t SimdCrc32c(const void * src, size_t size)
     else
 #endif
         return Base::Crc32c(src, size);
+}
+
+SIMD_API void SimdAbsDifference(const uint8_t *a, size_t aStride, const uint8_t * b, size_t bStride, uint8_t *c, size_t cStride,
+    size_t width, size_t height)
+{
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::AbsDifference(a, aStride, b, bStride, c, cStride, width, height);
+    else
+#endif
+    Base::AbsDifference(a, aStride, b, bStride, c, cStride, width, height);
 }
 
 SIMD_API void SimdAbsDifferenceSum(const uint8_t *a, size_t aStride, const uint8_t * b, size_t bStride,
@@ -807,6 +847,11 @@ SIMD_API void SimdBgraToBgr(const uint8_t * bgra, size_t width, size_t height, s
         Avx512bw::BgraToBgr(bgra, width, height, bgraStride, bgr, bgrStride);
     else
 #endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::BgraToBgr(bgra, width, height, bgraStride, bgr, bgrStride);
+    else
+#endif
 #ifdef SIMD_SSSE3_ENABLE
     if(Ssse3::Enable && width >= Ssse3::A)
         Ssse3::BgraToBgr(bgra, width, height, bgraStride, bgr, bgrStride);
@@ -853,6 +898,31 @@ SIMD_API void SimdBgraToGray(const uint8_t *bgra, size_t width, size_t height, s
     else
 #endif
         Base::BgraToGray(bgra, width, height, bgraStride, gray, grayStride);
+}
+
+SIMD_API void SimdBgraToRgb(const uint8_t* bgra, size_t width, size_t height, size_t bgraStride, uint8_t* rgb, size_t rgbStride)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::BgraToRgb(bgra, width, height, bgraStride, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::BgraToRgb(bgra, width, height, bgraStride, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::A)
+        Ssse3::BgraToRgb(bgra, width, height, bgraStride, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::BgraToRgb(bgra, width, height, bgraStride, rgb, rgbStride);
+    else
+#endif
+        Base::BgraToRgb(bgra, width, height, bgraStride, rgb, rgbStride);
 }
 
 SIMD_API void SimdBgraToYuv420p(const uint8_t * bgra, size_t width, size_t height, size_t bgraStride, uint8_t * y, size_t yStride, uint8_t * u, size_t uStride, uint8_t * v, size_t vStride)
@@ -1115,6 +1185,31 @@ SIMD_API void SimdBgrToHsl(const uint8_t * bgr, size_t width, size_t height, siz
 SIMD_API void SimdBgrToHsv(const uint8_t * bgr, size_t width, size_t height, size_t bgrStride, uint8_t * hsv, size_t hsvStride)
 {
     Base::BgrToHsv(bgr, width, height, bgrStride, hsv, hsvStride);
+}
+
+SIMD_API void SimdBgrToRgb(const uint8_t *bgr, size_t bgrStride, size_t width, size_t height, uint8_t * rgb, size_t rgbStride)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::BgrToRgb(bgr, bgrStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::BgrToRgb(bgr, bgrStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::A)
+        Ssse3::BgrToRgb(bgr, bgrStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::BgrToRgb(bgr, bgrStride, width, height, rgb, rgbStride);
+    else
+#endif
+        Base::BgrToRgb(bgr, bgrStride, width, height, rgb, rgbStride);
 }
 
 SIMD_API void SimdBgrToYuv420p(const uint8_t * bgr, size_t width, size_t height, size_t bgrStride, uint8_t * y, size_t yStride, uint8_t * u, size_t uStride, uint8_t * v, size_t vStride)
@@ -1466,34 +1561,6 @@ SIMD_API void SimdCopyFrame(const uint8_t * src, size_t srcStride, size_t width,
     Base::CopyFrame(src, srcStride, width, height, pixelSize, frameLeft, frameTop, frameRight, frameBottom, dst, dstStride);
 }
 
-typedef void* (*SimdConvolutionInitPtr) (size_t srcC, size_t srcH, size_t srcW, SimdBool srcT, size_t dstC, SimdBool dstT,
-    size_t kernelY, size_t kernelX, size_t dilationY, size_t dilationX, size_t strideY, size_t strideX,
-    size_t padY, size_t padX, size_t padH, size_t padW, size_t group, SimdConvolutionActivationType activation, SimdGemm32fNNPtr gemm);
-
-SimdConvolutionInitPtr simdConvolutionInit = SIMD_FUNC6(ConvolutionInit, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE3_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void * SimdConvolutionInit(size_t srcC, size_t srcH, size_t srcW, SimdBool srcT, size_t dstC, SimdBool dstT,
-    size_t kernelY, size_t kernelX, size_t dilationY, size_t dilationX, size_t strideY, size_t strideX,
-    size_t padY, size_t padX, size_t padH, size_t padW, size_t group, SimdConvolutionActivationType activation, SimdGemm32fNNPtr gemm)
-{
-    return simdConvolutionInit(srcC, srcH, srcW, srcT, dstC, dstT, kernelY, kernelX, dilationY, dilationX, strideY, strideX, padY, padX, padH, padW, group, activation, gemm);
-}
-
-SIMD_API size_t SimdConvolutionBufferSize(const void * convolution)
-{
-    return ((Convolution*)convolution)->BufferSize();
-}
-
-SIMD_API void SimdConvolutionSetParams(void * convolution, const float * weight, SimdBool trans, SimdBool * internal, const float * bias, const float * params)
-{
-    ((Convolution*)convolution)->SetParams(weight, trans, internal, bias, params);
-}
-
-SIMD_API void SimdConvolutionForward(void * convolution, const float * src, float * buf, float * dst)
-{
-    ((Convolution*)convolution)->Forward(src, buf, dst);
-}
-
 SIMD_API void SimdDeinterleaveUv(const uint8_t * uv, size_t uvStride, size_t width, size_t height,
                     uint8_t * u, size_t uStride, uint8_t * v, size_t vStride)
 {
@@ -1575,6 +1642,11 @@ SIMD_API void SimdDeinterleaveBgra(const uint8_t * bgra, size_t bgraStride, size
     else
 #endif
         Base::DeinterleaveBgra(bgra, bgraStride, width, height, b, bStride, g, gStride, r, rStride, a, aStride);
+}
+
+SIMD_API void * SimdDetectionLoadStringXml(char * xml)
+{
+    return Base::DetectionLoadStringXml(xml);
 }
 
 SIMD_API void * SimdDetectionLoadA(const char * path)
@@ -2048,11 +2120,11 @@ SIMD_API void SimdFillPixel(uint8_t * dst, size_t stride, size_t width, size_t h
         Base::FillPixel(dst, stride, width, height, pixel, pixelSize);
 }
 
-typedef void(*SimdFill32fPtr) (float * dst, size_t size, const float * value);
-SimdFill32fPtr simdFill32f = SIMD_FUNC4(Fill32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdFill32f(float * dst, size_t size, const float * value)
 {
+    typedef void(*SimdFill32fPtr) (float * dst, size_t size, const float * value);
+    const static SimdFill32fPtr simdFill32f = SIMD_FUNC4(Fill32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdFill32f(dst, size, value);
 }
 
@@ -2108,6 +2180,11 @@ SIMD_API void SimdSquaredDifferenceSum16f(const uint16_t * a, const uint16_t * b
         Avx2::SquaredDifferenceSum16f(a, b, size, sum);
     else
 #endif
+#if defined(SIMD_NEON_ENABLE) && defined(SIMD_NEON_FP16_ENABLE)
+    if (Neon::Enable && size >= Neon::F)
+        Neon::SquaredDifferenceSum16f(a, b, size, sum);
+    else
+#endif
         Base::SquaredDifferenceSum16f(a, b, size, sum);
 }
 
@@ -2123,12 +2200,32 @@ SIMD_API void SimdCosineDistance16f(const uint16_t * a, const uint16_t * b, size
         Avx2::CosineDistance16f(a, b, size, distance);
     else
 #endif
-#ifdef SIMD_NEON_ENABLE
+#if defined(SIMD_NEON_ENABLE) && defined(SIMD_NEON_FP16_ENABLE)
     if (Neon::Enable && size >= Neon::F)
         Neon::CosineDistance16f(a, b, size, distance);
     else
 #endif
         Base::CosineDistance16f(a, b, size, distance);
+}
+
+SIMD_API void SimdCosineDistancesMxNa16f(size_t M, size_t N, size_t K, const uint16_t * const * A, const uint16_t * const * B, float * distances)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable && K >= Avx512bw::F)
+        Avx512bw::CosineDistancesMxNa16f(M, N, K, A, B, distances);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && K >= Avx2::F)
+        Avx2::CosineDistancesMxNa16f(M, N, K, A, B, distances);
+    else
+#endif
+#if defined(SIMD_NEON_ENABLE) && defined(SIMD_NEON_FP16_ENABLE)
+    if (Neon::Enable && K >= Neon::F)
+        Neon::CosineDistancesMxNa16f(M, N, K, A, B, distances);
+    else
+#endif
+        Base::CosineDistancesMxNa16f(M, N, K, A, B, distances);
 }
 
 SIMD_API void SimdFloat32ToUint8(const float * src, size_t size, const float * lower, const float * upper, uint8_t * dst)
@@ -2181,11 +2278,11 @@ SIMD_API void SimdUint8ToFloat32(const uint8_t * src, size_t size, const float *
         Base::Uint8ToFloat32(src, size, lower, upper, dst);
 }
 
-typedef void(*SimdCosineDistance32fPtr) (const float * a, const float * b, size_t size, float * distance);
-SimdCosineDistance32fPtr simdCosineDistance32f = SIMD_FUNC5(CosineDistance32f, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdCosineDistance32f(const float * a, const float * b, size_t size, float * distance)
 {
+    typedef void(*SimdCosineDistance32fPtr) (const float * a, const float * b, size_t size, float * distance);
+    const static SimdCosineDistance32fPtr simdCosineDistance32f = SIMD_FUNC5(CosineDistance32f, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdCosineDistance32f(a, b, size, distance);
 }
 
@@ -2227,17 +2324,17 @@ SIMD_API void SimdGaussianBlur3x3(const uint8_t * src, size_t srcStride, size_t 
 
 typedef void(*SimdGemm32fPtr) (size_t M, size_t N, size_t K, const float * alpha, const float * A, size_t lda, const float * B, size_t ldb, const float * beta, float * C, size_t ldc);
 
-SimdGemm32fPtr simdGemm32fNN = SIMD_FUNC5(Gemm32fNN, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdGemm32fNN(size_t M, size_t N, size_t K, const float * alpha, const float * A, size_t lda, const float * B, size_t ldb, const float * beta, float * C, size_t ldc)
 {
+    const static SimdGemm32fPtr simdGemm32fNN = SIMD_FUNC5(Gemm32fNN, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdGemm32fNN(M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
-SimdGemm32fPtr simdGemm32fNT = SIMD_FUNC5(Gemm32fNT, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE3_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdGemm32fNT(size_t M, size_t N, size_t K, const float * alpha, const float * A, size_t lda, const float * B, size_t ldb, const float * beta, float * C, size_t ldc)
 {
+    const static SimdGemm32fPtr simdGemm32fNT = SIMD_FUNC5(Gemm32fNT, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE3_FUNC, SIMD_NEON_FUNC);
+
     simdGemm32fNT(M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
@@ -2678,19 +2775,19 @@ SIMD_API void SimdHogLiteFilterSeparable(const float * src, size_t srcStride, si
         Base::HogLiteFilterSeparable(src, srcStride, srcWidth, srcHeight, featureSize, hFilter, hSize, vFilter, vSize, dst, dstStride, add);
 }
 
-typedef void(*SimdHogLiteFindMax7x7Ptr) (const float * a, size_t aStride, const float * b, size_t bStride, size_t height, float * value, size_t * col, size_t * row);
-SimdHogLiteFindMax7x7Ptr simdHogLiteFindMax7x7 = SIMD_FUNC3(HogLiteFindMax7x7, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdHogLiteFindMax7x7(const float * a, size_t aStride, const float * b, size_t bStride, size_t height, float * value, size_t * col, size_t * row)
 {
+    typedef void(*SimdHogLiteFindMax7x7Ptr) (const float * a, size_t aStride, const float * b, size_t bStride, size_t height, float * value, size_t * col, size_t * row);
+    const static SimdHogLiteFindMax7x7Ptr simdHogLiteFindMax7x7 = SIMD_FUNC3(HogLiteFindMax7x7, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC, SIMD_NEON_FUNC);
+
     simdHogLiteFindMax7x7(a, aStride, b, bStride, height, value, col, row);
 }
 
-typedef void(*SimdHogLiteCreateMaskPtr) (const float * src, size_t srcStride, size_t srcWidth, size_t srcHeight, const float * threshold, size_t scale, size_t size, uint32_t * dst, size_t dstStride);
-SimdHogLiteCreateMaskPtr simdHogLiteCreateMask = SIMD_FUNC4(HogLiteCreateMask, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdHogLiteCreateMask(const float * src, size_t srcStride, size_t srcWidth, size_t srcHeight, const float * threshold, size_t scale, size_t size, uint32_t * dst, size_t dstStride)
 {
+    typedef void(*SimdHogLiteCreateMaskPtr) (const float * src, size_t srcStride, size_t srcWidth, size_t srcHeight, const float * threshold, size_t scale, size_t size, uint32_t * dst, size_t dstStride);
+    const static SimdHogLiteCreateMaskPtr simdHogLiteCreateMask = SIMD_FUNC4(HogLiteCreateMask, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC, SIMD_NEON_FUNC);
+
     simdHogLiteCreateMask(src, srcStride, srcWidth, srcHeight, threshold, scale, size, dst, dstStride);
 }
 
@@ -3250,131 +3347,107 @@ SIMD_API void SimdNeuralConvert(const uint8_t * src, size_t srcStride, size_t wi
         Base::NeuralConvert(src, srcStride, width, height, dst, dstStride, inversion);
 }
 
-typedef void(*SimdNeuralProductSumPtr) (const float * a, const float * b, size_t size, float * sum);
-SimdNeuralProductSumPtr simdNeuralProductSum = SIMD_FUNC6(NeuralProductSum, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralProductSum(const float * a, const float * b, size_t size, float * sum)
 {
+    typedef void(*SimdNeuralProductSumPtr) (const float * a, const float * b, size_t size, float * sum);
+    const static SimdNeuralProductSumPtr simdNeuralProductSum = SIMD_FUNC6(NeuralProductSum, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralProductSum(a, b, size, sum);
 }
 
-typedef void(*SimdNeuralAddVectorMultipliedByValuePtr) (const float * src, size_t size, const float * value, float * dst);
-SimdNeuralAddVectorMultipliedByValuePtr simdNeuralAddVectorMultipliedByValue = SIMD_FUNC5(NeuralAddVectorMultipliedByValue, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddVectorMultipliedByValue(const float * src, size_t size, const float * value, float * dst)
 {
+    typedef void(*SimdNeuralAddVectorMultipliedByValuePtr) (const float * src, size_t size, const float * value, float * dst);
+    const static SimdNeuralAddVectorMultipliedByValuePtr simdNeuralAddVectorMultipliedByValue = SIMD_FUNC5(NeuralAddVectorMultipliedByValue, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddVectorMultipliedByValue(src, size, value, dst);
 }
 
-typedef void(*SimdNeuralAddVectorPtr) (const float * src, size_t size, float * dst);
-SimdNeuralAddVectorPtr simdNeuralAddVector = SIMD_FUNC4(NeuralAddVector, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddVector(const float * src, size_t size, float * dst)
 {
+    typedef void(*SimdNeuralAddVectorPtr) (const float * src, size_t size, float * dst);
+    const static SimdNeuralAddVectorPtr simdNeuralAddVector = SIMD_FUNC4(NeuralAddVector, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddVector(src, size, dst);
 }
 
-typedef void(*SimdNeuralAddValuePtr) (const float * value, float * dst, size_t size);
-SimdNeuralAddValuePtr simdNeuralAddValue = SIMD_FUNC4(NeuralAddValue, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddValue(const float * value, float * dst, size_t size)
 {
+    typedef void(*SimdNeuralAddValuePtr) (const float * value, float * dst, size_t size);
+    const static SimdNeuralAddValuePtr simdNeuralAddValue = SIMD_FUNC4(NeuralAddValue, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddValue(value, dst, size);
 }
 
-typedef void(*SimdNeuralSigmoidPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralSigmoidPtr simdNeuralSigmoid = SIMD_FUNC4(NeuralSigmoid, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdNeuralSigmoid(const float * src, size_t size, const float * slope, float * dst)
-{
-    simdNeuralSigmoid(src, size, slope, dst);
-}
-
-typedef void(*SimdNeuralRoughSigmoidPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralRoughSigmoidPtr simdNeuralRoughSigmoid = SIMD_FUNC5(NeuralRoughSigmoid, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralRoughSigmoid(const float * src, size_t size, const float * slope, float * dst)
 {
+    typedef void(*SimdNeuralRoughSigmoidPtr) (const float * src, size_t size, const float * slope, float * dst);
+    const static SimdNeuralRoughSigmoidPtr simdNeuralRoughSigmoid = SIMD_FUNC5(NeuralRoughSigmoid, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralRoughSigmoid(src, size, slope, dst);
 }
 
-typedef void(*SimdNeuralRoughSigmoid2Ptr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralRoughSigmoid2Ptr simdNeuralRoughSigmoid2 = SIMD_FUNC5(NeuralRoughSigmoid2, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralRoughSigmoid2(const float * src, size_t size, const float * slope, float * dst)
 {
+    typedef void(*SimdNeuralRoughSigmoid2Ptr) (const float * src, size_t size, const float * slope, float * dst);
+    const static SimdNeuralRoughSigmoid2Ptr simdNeuralRoughSigmoid2 = SIMD_FUNC5(NeuralRoughSigmoid2, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralRoughSigmoid2(src, size, slope, dst);
 }
 
-typedef void(*SimdNeuralDerivativeSigmoidPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralDerivativeSigmoidPtr simdNeuralDerivativeSigmoid = SIMD_FUNC4(NeuralDerivativeSigmoid, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralDerivativeSigmoid(const float * src, size_t size, const float * slope, float * dst)
 {
+    typedef void(*SimdNeuralDerivativeSigmoidPtr) (const float * src, size_t size, const float * slope, float * dst);
+    const static SimdNeuralDerivativeSigmoidPtr simdNeuralDerivativeSigmoid = SIMD_FUNC4(NeuralDerivativeSigmoid, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralDerivativeSigmoid(src, size, slope, dst);
 }
 
-typedef void(*SimdNeuralTanhPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralTanhPtr simdNeuralTanh = SIMD_FUNC4(NeuralTanh, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdNeuralTanh(const float * src, size_t size, const float * slope, float * dst)
-{
-    simdNeuralTanh(src, size, slope, dst);
-}
-
-typedef void(*SimdNeuralRoughTanhPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralRoughTanhPtr simdNeuralRoughTanh = SIMD_FUNC4(NeuralRoughTanh, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralRoughTanh(const float * src, size_t size, const float * slope, float * dst)
 {
+    typedef void(*SimdNeuralRoughTanhPtr) (const float * src, size_t size, const float * slope, float * dst);
+    const static SimdNeuralRoughTanhPtr simdNeuralRoughTanh = SIMD_FUNC4(NeuralRoughTanh, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralRoughTanh(src, size, slope, dst);
 }
 
-typedef void(*SimdNeuralDerivativeTanhPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralDerivativeTanhPtr simdNeuralDerivativeTanh = SIMD_FUNC4(NeuralDerivativeTanh, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralDerivativeTanh(const float * src, size_t size, const float * slope, float * dst)
 {
+    typedef void(*SimdNeuralDerivativeTanhPtr) (const float * src, size_t size, const float * slope, float * dst);
+    const static SimdNeuralDerivativeTanhPtr simdNeuralDerivativeTanh = SIMD_FUNC4(NeuralDerivativeTanh, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralDerivativeTanh(src, size, slope, dst);
 }
 
-typedef void(*SimdNeuralReluPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralReluPtr simdNeuralRelu = SIMD_FUNC4(NeuralRelu, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdNeuralRelu(const float * src, size_t size, const float * slope, float * dst)
-{
-    simdNeuralRelu(src, size, slope, dst);
-}
-
-typedef void(*SimdNeuralDerivativeReluPtr) (const float * src, size_t size, const float * slope, float * dst);
-SimdNeuralDerivativeReluPtr simdNeuralDerivativeRelu = SIMD_FUNC4(NeuralDerivativeRelu, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralDerivativeRelu(const float * src, size_t size, const float * slope, float * dst)
 {
+    typedef void(*SimdNeuralDerivativeReluPtr) (const float * src, size_t size, const float * slope, float * dst);
+    const static SimdNeuralDerivativeReluPtr simdNeuralDerivativeRelu = SIMD_FUNC4(NeuralDerivativeRelu, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralDerivativeRelu(src, size, slope, dst);
 }
 
-typedef void(*SimdNeuralPowPtr) (const float * src, size_t size, const float * exponent, float * dst);
-SimdNeuralPowPtr simdNeuralPow = SIMD_FUNC4(NeuralPow, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralPow(const float * src, size_t size, const float * exponent, float * dst)
 {
+    typedef void(*SimdNeuralPowPtr) (const float * src, size_t size, const float * exponent, float * dst);
+    const static SimdNeuralPowPtr simdNeuralPow = SIMD_FUNC4(NeuralPow, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralPow(src, size, exponent, dst);
 }
 
-typedef void(*SimdNeuralUpdateWeightsPtr) (const float * x, size_t size, const float * a, const float * b, float * d, float * w);
-SimdNeuralUpdateWeightsPtr simdNeuralUpdateWeights = SIMD_FUNC4(NeuralUpdateWeights, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralUpdateWeights(const float * x, size_t size, const float * a, const float * b, float * d, float * w)
 {
+    typedef void(*SimdNeuralUpdateWeightsPtr) (const float * x, size_t size, const float * a, const float * b, float * d, float * w);
+    const static SimdNeuralUpdateWeightsPtr simdNeuralUpdateWeights = SIMD_FUNC4(NeuralUpdateWeights, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralUpdateWeights(x, size, a, b, d, w);
 }
 
-typedef void(*SimdNeuralAdaptiveGradientUpdatePtr) (const float * delta, size_t size, size_t batch, const float * alpha, const float * epsilon, float * gradient, float * weight);
-SimdNeuralAdaptiveGradientUpdatePtr simdNeuralAdaptiveGradientUpdate = SIMD_FUNC4(NeuralAdaptiveGradientUpdate, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAdaptiveGradientUpdate(const float * delta, size_t size, size_t batch, const float * alpha, const float * epsilon, float * gradient, float * weight)
 {
+    typedef void(*SimdNeuralAdaptiveGradientUpdatePtr) (const float * delta, size_t size, size_t batch, const float * alpha, const float * epsilon, float * gradient, float * weight);
+    const static SimdNeuralAdaptiveGradientUpdatePtr simdNeuralAdaptiveGradientUpdate = SIMD_FUNC4(NeuralAdaptiveGradientUpdate, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAdaptiveGradientUpdate(delta, size, batch, alpha, epsilon, gradient, weight);
 }
 
@@ -3498,35 +3571,35 @@ SIMD_API void SimdNeuralAddConvolution5x5Forward(const float * src, size_t srcSt
         Base::NeuralAddConvolution5x5Forward(src, srcStride, width, height, weights, dst, dstStride);
 }
 
-typedef void(*SimdNeuralAddConvolution2x2BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
-SimdNeuralAddConvolution2x2BackwardPtr simdNeuralAddConvolution2x2Backward = SIMD_FUNC5(NeuralAddConvolution2x2Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddConvolution2x2Backward(const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride)
 {
+    typedef void(*SimdNeuralAddConvolution2x2BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
+    const static SimdNeuralAddConvolution2x2BackwardPtr simdNeuralAddConvolution2x2Backward = SIMD_FUNC5(NeuralAddConvolution2x2Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddConvolution2x2Backward(src, srcStride, width, height, weights, dst, dstStride);
 }
 
-typedef void(*SimdNeuralAddConvolution3x3BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
-SimdNeuralAddConvolution3x3BackwardPtr simdNeuralAddConvolution3x3Backward = SIMD_FUNC5(NeuralAddConvolution3x3Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddConvolution3x3Backward(const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride)
 {
+    typedef void(*SimdNeuralAddConvolution3x3BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
+    const static SimdNeuralAddConvolution3x3BackwardPtr simdNeuralAddConvolution3x3Backward = SIMD_FUNC5(NeuralAddConvolution3x3Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddConvolution3x3Backward(src, srcStride, width, height, weights, dst, dstStride);
 }
 
-typedef void(*SimdNeuralAddConvolution4x4BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
-SimdNeuralAddConvolution4x4BackwardPtr simdNeuralAddConvolution4x4Backward = SIMD_FUNC5(NeuralAddConvolution4x4Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddConvolution4x4Backward(const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride)
 {
+    typedef void(*SimdNeuralAddConvolution4x4BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
+    const static SimdNeuralAddConvolution4x4BackwardPtr simdNeuralAddConvolution4x4Backward = SIMD_FUNC5(NeuralAddConvolution4x4Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddConvolution4x4Backward(src, srcStride, width, height, weights, dst, dstStride);
 }
 
-typedef void(*SimdNeuralAddConvolution5x5BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
-SimdNeuralAddConvolution5x5BackwardPtr simdNeuralAddConvolution5x5Backward = SIMD_FUNC5(NeuralAddConvolution5x5Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralAddConvolution5x5Backward(const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride)
 {
+    typedef void(*SimdNeuralAddConvolution5x5BackwardPtr) (const float * src, size_t srcStride, size_t width, size_t height, const float * weights, float * dst, size_t dstStride);
+    const static SimdNeuralAddConvolution5x5BackwardPtr simdNeuralAddConvolution5x5Backward = SIMD_FUNC5(NeuralAddConvolution5x5Backward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralAddConvolution5x5Backward(src, srcStride, width, height, weights, dst, dstStride);
 }
 
@@ -3745,15 +3818,15 @@ SIMD_API void SimdNeuralPooling2x2Max3x3(const float * src, size_t srcStride, si
         Base::NeuralPooling2x2Max3x3(src, srcStride, width, height, dst, dstStride);
 }
 
-typedef void(*SimdNeuralConvolutionForwardPtr) (const float * src, size_t srcWidth, size_t srcHeight, size_t srcDepth, 
-    const float * weight, size_t kernelX, size_t kernelY, size_t padX, size_t padY, size_t strideX, size_t strideY, size_t dilationX, size_t dilationY, 
-    void * buffer, size_t * size, float * dst, size_t dstWidth, size_t dstHeight, size_t dstDepth, int add);
-volatile SimdNeuralConvolutionForwardPtr simdNeuralConvolutionForward = SIMD_FUNC5(NeuralConvolutionForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE3_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdNeuralConvolutionForward(const float * src, size_t srcWidth, size_t srcHeight, size_t srcDepth, 
     const float * weight, size_t kernelX, size_t kernelY, size_t padX, size_t padY, size_t strideX, size_t strideY, size_t dilationX, size_t dilationY, 
     void * buffer, size_t * size, float * dst, size_t dstWidth, size_t dstHeight, size_t dstDepth, int add)
 {
+    typedef void(*SimdNeuralConvolutionForwardPtr) (const float * src, size_t srcWidth, size_t srcHeight, size_t srcDepth, 
+        const float * weight, size_t kernelX, size_t kernelY, size_t padX, size_t padY, size_t strideX, size_t strideY, size_t dilationX, size_t dilationY, 
+        void * buffer, size_t * size, float * dst, size_t dstWidth, size_t dstHeight, size_t dstDepth, int add);
+    const static SimdNeuralConvolutionForwardPtr simdNeuralConvolutionForward = SIMD_FUNC5(NeuralConvolutionForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE3_FUNC, SIMD_NEON_FUNC);
+
     simdNeuralConvolutionForward(src, srcWidth, srcHeight, srcDepth, weight, kernelX, kernelY, padX, padY, strideX, strideY, dilationX, dilationY, buffer, size, dst, dstWidth, dstHeight, dstDepth, add);
 }
 
@@ -4167,6 +4240,11 @@ SIMD_API void SimdResizeBilinear(const uint8_t *src, size_t srcWidth, size_t src
 
 SIMD_API void * SimdResizerInit(size_t srcX, size_t srcY, size_t dstX, size_t dstY, size_t channels, SimdResizeChannelType type, SimdResizeMethodType method)
 {
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        return Avx512bw::ResizerInit(srcX, srcY, dstX, dstY, channels, type, method);
+    else
+#endif
 #ifdef SIMD_AVX512F_ENABLE
     if (Avx512f::Enable)
         return Avx512f::ResizerInit(srcX, srcY, dstX, dstY, channels, type, method);
@@ -4180,6 +4258,21 @@ SIMD_API void * SimdResizerInit(size_t srcX, size_t srcY, size_t dstX, size_t ds
 #ifdef SIMD_AVX_ENABLE
     if (Avx::Enable)
         return Avx::ResizerInit(srcX, srcY, dstX, dstY, channels, type, method);
+    else
+#endif
+#ifdef SIMD_SSE41_ENABLE
+    if (Sse41::Enable)
+        return Sse41::ResizerInit(srcX, srcY, dstX, dstY, channels, type, method);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable)
+        return Ssse3::ResizerInit(srcX, srcY, dstX, dstY, channels, type, method);
+    else
+#endif
+#ifdef SIMD_SSE2_ENABLE
+    if (Sse2::Enable)
+        return Sse2::ResizerInit(srcX, srcY, dstX, dstY, channels, type, method);
     else
 #endif
 #ifdef SIMD_SSE_ENABLE
@@ -4197,7 +4290,57 @@ SIMD_API void * SimdResizerInit(size_t srcX, size_t srcY, size_t dstX, size_t ds
 
 SIMD_API void SimdResizerRun(const void * resizer, const uint8_t * src, size_t srcStride, uint8_t * dst, size_t dstStride)
 {
-    ((const Resizer*)resizer)->Run(src, srcStride, dst, dstStride);
+    ((Resizer*)resizer)->Run(src, srcStride, dst, dstStride);
+}
+
+SIMD_API void SimdRgbToBgra(const uint8_t* rgb, size_t width, size_t height, size_t rgbStride, uint8_t* bgra, size_t bgraStride, uint8_t alpha)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::RgbToBgra(rgb, width, height, rgbStride, bgra, bgraStride, alpha);
+    else
+#endif
+#if defined(SIMD_AVX2_ENABLE) && !defined(SIMD_CLANG_AVX2_BGR_TO_BGRA_ERROR)
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::RgbToBgra(rgb, width, height, rgbStride, bgra, bgraStride, alpha);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::A)
+        Ssse3::RgbToBgra(rgb, width, height, rgbStride, bgra, bgraStride, alpha);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::RgbToBgra(rgb, width, height, rgbStride, bgra, bgraStride, alpha);
+    else
+#endif
+        Base::RgbToBgra(rgb, width, height, rgbStride, bgra, bgraStride, alpha);
+}
+
+SIMD_API void SimdRgbToGray(const uint8_t* rgb, size_t width, size_t height, size_t rgbStride, uint8_t* gray, size_t grayStride)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::RgbToGray(rgb, width, height, rgbStride, gray, grayStride);
+    else
+#endif
+#if defined(SIMD_AVX2_ENABLE) && !defined(SIMD_CLANG_AVX2_BGR_TO_BGRA_ERROR)
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::RgbToGray(rgb, width, height, rgbStride, gray, grayStride);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::A)
+        Ssse3::RgbToGray(rgb, width, height, rgbStride, gray, grayStride);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::RgbToGray(rgb, width, height, rgbStride, gray, grayStride);
+    else
+#endif
+        Base::RgbToGray(rgb, width, height, rgbStride, gray, grayStride);
 }
 
 SIMD_API void SimdSegmentationChangeIndex(uint8_t * mask, size_t stride, size_t width, size_t height, uint8_t oldIndex, uint8_t newIndex)
@@ -4720,19 +4863,19 @@ SIMD_API void SimdSquaredDifferenceSumMasked(const uint8_t *a, size_t aStride, c
         Base::SquaredDifferenceSumMasked(a, aStride, b, bStride, mask, maskStride, index, width, height, sum);
 }
 
-typedef void (* SimdSquaredDifferenceSum32fPtr) (const float * a, const float * b, size_t size, float * sum);
-SimdSquaredDifferenceSum32fPtr simdSquaredDifferenceSum32f = SIMD_FUNC5(SquaredDifferenceSum32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdSquaredDifferenceSum32f(const float * a, const float * b, size_t size, float * sum)
 {
+    typedef void (* SimdSquaredDifferenceSum32fPtr) (const float * a, const float * b, size_t size, float * sum);
+    const static SimdSquaredDifferenceSum32fPtr simdSquaredDifferenceSum32f = SIMD_FUNC5(SquaredDifferenceSum32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
+
     simdSquaredDifferenceSum32f(a, b, size, sum);
 }
 
-typedef void (* SimdSquaredDifferenceKahanSum32fPtr) (const float * a, const float * b, size_t size, float * sum);
-SimdSquaredDifferenceKahanSum32fPtr simdSquaredDifferenceKahanSum32f = SIMD_FUNC5(SquaredDifferenceKahanSum32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
-
 SIMD_API void SimdSquaredDifferenceKahanSum32f(const float * a, const float * b, size_t size, float * sum)
 {
+    typedef void (* SimdSquaredDifferenceKahanSum32fPtr) (const float * a, const float * b, size_t size, float * sum);
+    const static SimdSquaredDifferenceKahanSum32fPtr simdSquaredDifferenceKahanSum32f = SIMD_FUNC5(SquaredDifferenceKahanSum32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_VSX_FUNC, SIMD_NEON_FUNC);
+
     simdSquaredDifferenceKahanSum32f(a, b, size, sum);
 }
 
@@ -4770,32 +4913,59 @@ SIMD_API void SimdGetStatistic(const uint8_t * src, size_t stride, size_t width,
 SIMD_API void SimdGetMoments(const uint8_t * mask, size_t stride, size_t width, size_t height, uint8_t index,
                 uint64_t * area, uint64_t * x, uint64_t * y, uint64_t * xx, uint64_t * xy, uint64_t * yy)
 {
+    const bool simd = width < SHRT_MAX && height < SHRT_MAX;
 #ifdef SIMD_AVX512BW_ENABLE
-    if (Avx512bw::Enable && width < SHRT_MAX && height < SHRT_MAX)
+    if (Avx512bw::Enable && width >= Avx512bw::A && simd)
         Avx512bw::GetMoments(mask, stride, width, height, index, area, x, y, xx, xy, yy);
     else
 #endif
 #ifdef SIMD_AVX2_ENABLE
-    if(Avx2::Enable && width >= Avx2::A && width < SHRT_MAX && height < SHRT_MAX)
+    if(Avx2::Enable && width >= Avx2::A)
         Avx2::GetMoments(mask, stride, width, height, index, area, x, y, xx, xy, yy);
     else
 #endif
 #ifdef SIMD_SSE2_ENABLE
-    if(Sse2::Enable && width >= Sse2::A && width < SHRT_MAX && height < SHRT_MAX)
+    if(Sse2::Enable && width >= Sse2::A)
         Sse2::GetMoments(mask, stride, width, height, index, area, x, y, xx, xy, yy);
     else
 #endif
 #ifdef SIMD_VMX_ENABLE
-    if(Vmx::Enable && width >= Vmx::A && width < SHRT_MAX && height < SHRT_MAX)
+    if(Vmx::Enable && width >= Vmx::A && simd)
         Vmx::GetMoments(mask, stride, width, height, index, area, x, y, xx, xy, yy);
     else
 #endif
 #ifdef SIMD_NEON_ENABLE
-    if (Neon::Enable && width >= Neon::A && width < SHRT_MAX && height < SHRT_MAX)
+    if (Neon::Enable && width >= Neon::A && simd)
         Neon::GetMoments(mask, stride, width, height, index, area, x, y, xx, xy, yy);
     else
 #endif
         Base::GetMoments(mask, stride, width, height, index, area, x, y, xx, xy, yy);
+}
+
+SIMD_API void SimdGetObjectMoments(const uint8_t* src, size_t srcStride, size_t width, size_t height, const uint8_t* mask, size_t maskStride, uint8_t index,
+    uint64_t* n, uint64_t* s, uint64_t* sx, uint64_t* sy, uint64_t* sxx, uint64_t* sxy, uint64_t* syy)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::GetObjectMoments(src, srcStride, width, height, mask, maskStride, index, n, s, sx, sy, sxx, sxy, syy);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::GetObjectMoments(src, srcStride, width, height, mask, maskStride, index, n, s, sx, sy, sxx, sxy, syy);
+    else
+#endif
+#ifdef SIMD_SSE2_ENABLE
+    if (Sse2::Enable && width >= Sse2::A)
+        Sse2::GetObjectMoments(src, srcStride, width, height, mask, maskStride, index, n, s, sx, sy, sxx, sxy, syy);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::GetObjectMoments(src, srcStride, width, height, mask, maskStride, index, n, s, sx, sy, sxx, sxy, syy);
+    else
+#endif
+        Base::GetObjectMoments(src, srcStride, width, height, mask, maskStride, index, n, s, sx, sy, sxx, sxy, syy);
 }
 
 SIMD_API void SimdGetRowSums(const uint8_t * src, size_t stride, size_t width, size_t height, uint32_t * sums)
@@ -5094,119 +5264,470 @@ SIMD_API void SimdSvmSumLinear(const float * x, const float * svs, const float *
         Base::SvmSumLinear(x, svs, weights, length, count, sum);
 }
 
-typedef void(*SimdSynetAddBiasPtr) (const float * bias, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetAddBiasPtr simdSynetAddBias = SIMD_FUNC4(SynetAddBias, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetAddBias(const float * bias, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdSynetAddBias(const float * bias, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
 {
-    simdSynetAddBias(bias, count, size, dst, trans);
+    typedef void(*SimdSynetAddBiasPtr) (const float * bias, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetAddBiasPtr simdSynetAddBias = SIMD_FUNC4(SynetAddBias, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetAddBias(bias, channels, spatial, dst, format);
 }
 
-typedef void(*SimdSynetEltwiseLayerForwardPtr) (float const * const * src, const float * weight, size_t count, size_t size, SimdSynetEltwiseOperationType type, float * dst);
-volatile SimdSynetEltwiseLayerForwardPtr simdSynetEltwiseLayerForward = SIMD_FUNC5(SynetEltwiseLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+SIMD_API void SimdSynetAdd8i(const uint8_t* aData, const float* aScale, const float* aShift, const uint8_t* bData, const float* bScale, const float* bShift,
+    uint8_t* cData, const float* cScale, const float* cShift, size_t batch, size_t channels, size_t spatial, SimdTensorFormatType format, SimdSynetCompatibilityType compatibility)
+{
+    typedef void(*SimdSynetAdd8iPtr) (const uint8_t* aData, const float* aScale, const float* aShift, const uint8_t* bData, const float* bScale, const float* bShift,
+        uint8_t* cData, const float* cScale, const float* cShift, size_t batch, size_t channels, size_t spatial, SimdTensorFormatType format, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetAdd8iPtr simdSynetAdd8i = SIMD_FUNC3(SynetAdd8i, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC);
+
+    simdSynetAdd8i(aData, aScale, aShift, bData, bScale, bShift, cData, cScale, cShift, batch, channels, spatial, format, compatibility);
+}
+
+SIMD_API void SimdSynetConvert32fTo8u(const float* src, size_t batch, size_t channels, size_t height, size_t width, SimdTensorFormatType format, const float* scale, const float* shift, uint8_t* dst, SimdSynetCompatibilityType compatibility)
+{
+    typedef void(*SimdSynetConvert32fTo8uPtr) (const float* src, size_t batch, size_t channels, size_t height, size_t width, SimdTensorFormatType format, const float* scale, const float* shift, uint8_t* dst, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetConvert32fTo8uPtr simdSynetConvert32fTo8u = SIMD_FUNC4(SynetConvert32fTo8u, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetConvert32fTo8u(src, batch, channels, height, width, format, scale, shift, dst, compatibility);
+}
+
+SIMD_API void * SimdSynetConvolution32fInit(size_t batch, const SimdConvolutionParameters * params, SimdGemm32fNNPtr gemm)
+{
+    typedef void* (*SimdSynetConvolution32fInitPtr) (size_t batch, const SimdConvolutionParameters * params, SimdGemm32fNNPtr gemm);
+    const static SimdSynetConvolution32fInitPtr simdSynetConvolution32fInit = SIMD_FUNC6(SynetConvolution32fInit, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE3_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    return simdSynetConvolution32fInit(batch, params, gemm);
+}
+
+SIMD_API size_t SimdSynetConvolution32fExternalBufferSize(const void * context)
+{
+    return ((SynetConvolution32f*)context)->ExternalBufferSize();
+}
+
+SIMD_API size_t SimdSynetConvolution32fInternalBufferSize(const void * context)
+{
+    return ((SynetConvolution32f*)context)->InternalBufferSize();
+}
+
+SIMD_API void SimdSynetConvolution32fSetParams(void * context, const float * weight, SimdBool * internal, const float * bias, const float * params)
+{
+    ((SynetConvolution32f*)context)->SetParams(weight, internal, bias, params);
+}
+
+SIMD_API void SimdSynetConvolution32fForward(void * context, const float * src, float * buf, float * dst)
+{
+    SynetConvolution32f * c = (SynetConvolution32f*)context;
+    SIMD_PERF_EXT(c);
+    c->Forward(src, buf, dst);
+}
+
+SIMD_API void* SimdSynetConvolution8iInit(size_t batch, const SimdConvolutionParameters* conv, SimdSynetCompatibilityType compatibility)
+{
+    typedef void* (*SimdSynetConvolution8iInitPtr) (size_t batch, const SimdConvolutionParameters* conv, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetConvolution8iInitPtr simdSynetConvolution8iInit = SIMD_FUNC5(SynetConvolution8iInit, SIMD_AVX512VNNI_FUNC, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC, SIMD_NEON_FUNC);
+    
+    return simdSynetConvolution8iInit(batch, conv, compatibility);
+}
+
+SIMD_API size_t SimdSynetConvolution8iExternalBufferSize(const void* context)
+{
+    return ((SynetConvolution8i*)context)->ExternalBufferSize();
+}
+
+SIMD_API size_t SimdSynetConvolution8iInternalBufferSize(const void* context)
+{
+    return ((SynetConvolution8i*)context)->InternalBufferSize();
+}
+
+SIMD_API void SimdSynetConvolution8iSetParams(void* context, const float* weight, const float* bias, const float* params, const float* const* stats)
+{
+    ((SynetConvolution8i*)context)->SetParams(weight, bias, params, stats);
+}
+
+SIMD_API void SimdSynetConvolution8iForward(void* context, const uint8_t* src, uint8_t* buf, uint8_t* dst)
+{
+    SynetConvolution8i* c = (SynetConvolution8i*)context;
+    SIMD_PERF_EXT(c);
+    c->Forward(src, buf, dst);
+}
+
+SIMD_API void * SimdSynetDeconvolution32fInit(size_t batch, const SimdConvolutionParameters * params, SimdGemm32fNNPtr gemm)
+{
+    typedef void* (*SimdSynetDeconvolution32fInitPtr) (size_t batch, const SimdConvolutionParameters * params, SimdGemm32fNNPtr gemm);
+    const static SimdSynetDeconvolution32fInitPtr simdSynetDeconvolution32fInit = SIMD_FUNC5(SynetDeconvolution32fInit, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+    
+    return simdSynetDeconvolution32fInit(batch, params, gemm);
+}
+
+SIMD_API size_t SimdSynetDeconvolution32fExternalBufferSize(const void * context)
+{
+    return ((SynetDeconvolution32f*)context)->ExternalBufferSize();
+}
+
+SIMD_API size_t SimdSynetDeconvolution32fInternalBufferSize(const void * context)
+{
+    return ((SynetDeconvolution32f*)context)->InternalBufferSize();
+}
+
+SIMD_API void SimdSynetDeconvolution32fSetParams(void * context, const float * weight, SimdBool * internal, const float * bias, const float * params)
+{
+    ((SynetDeconvolution32f*)context)->SetParams(weight, internal, bias, params);
+}
+
+SIMD_API void SimdSynetDeconvolution32fForward(void * context, const float * src, float * buf, float * dst)
+{
+    SynetDeconvolution32f * d = (SynetDeconvolution32f*)context;
+    SIMD_PERF_EXT(d);
+    d->Forward(src, buf, dst);
+}
 
 SIMD_API void SimdSynetEltwiseLayerForward(float const * const * src, const float * weight, size_t count, size_t size, SimdSynetEltwiseOperationType type, float * dst)
 {
+    typedef void(*SimdSynetEltwiseLayerForwardPtr) (float const * const * src, const float * weight, size_t count, size_t size, SimdSynetEltwiseOperationType type, float * dst);
+    const static SimdSynetEltwiseLayerForwardPtr simdSynetEltwiseLayerForward = SIMD_FUNC5(SynetEltwiseLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdSynetEltwiseLayerForward(src, weight, count, size, type, dst);
 }
 
-typedef void(*SimdSynetFusedLayerForward0Ptr) (const float * src, const float * bias, const float * scale, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetFusedLayerForward0Ptr simdSynetFusedLayerForward0 = SIMD_FUNC4(SynetFusedLayerForward0, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetFusedLayerForward0(const float * src, const float * bias, const float * scale, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdSynetElu32f(const float * src, size_t size, const float * alpha, float * dst)
 {
-    simdSynetFusedLayerForward0(src, bias, scale, count, size, dst, trans);
+    typedef void(*SimdSynetElu32fPtr) (const float * src, size_t size, const float * alpha, float * dst);
+    const static SimdSynetElu32fPtr simdSynetElu32f = SIMD_FUNC4(SynetElu32f, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetElu32f(src, size, alpha, dst);
 }
 
-typedef void(*SimdSynetFusedLayerForward1Ptr) (const float * src, const float * bias0, const float * scale1, const float * bias1, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetFusedLayerForward1Ptr simdSynetFusedLayerForward1 = SIMD_FUNC4(SynetFusedLayerForward1, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetFusedLayerForward1(const float * src, const float * bias0, const float * scale1, const float * bias1, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdSynetFusedLayerForward0(const float * src, const float * bias, const float * scale, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
 {
-    simdSynetFusedLayerForward1(src, bias0, scale1, bias1, count, size, dst, trans);
+    typedef void(*SimdSynetFusedLayerForward0Ptr) (const float * src, const float * bias, const float * scale, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward0Ptr simdSynetFusedLayerForward0 = SIMD_FUNC4(SynetFusedLayerForward0, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward0(src, bias, scale, channels, spatial, dst, format);
 }
 
-typedef void(*SimdSynetFusedLayerForward2Ptr) (const float * src, const float * scale, const float * bias, size_t count, size_t size, const float * slope, float * dst, SimdBool trans);
-volatile SimdSynetFusedLayerForward2Ptr simdSynetFusedLayerForward2 = SIMD_FUNC4(SynetFusedLayerForward2, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetFusedLayerForward2(const float * src, const float * scale, const float * bias, size_t count, size_t size, const float * slope, float * dst, SimdBool trans)
+SIMD_API void SimdSynetFusedLayerForward1(const float * src, const float * bias0, const float * scale1, const float * bias1, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
 {
-    simdSynetFusedLayerForward2(src, scale, bias, count, size, slope, dst, trans);
+    typedef void(*SimdSynetFusedLayerForward1Ptr) (const float * src, const float * bias0, const float * scale1, const float * bias1, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward1Ptr simdSynetFusedLayerForward1 = SIMD_FUNC4(SynetFusedLayerForward1, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward1(src, bias0, scale1, bias1, channels, spatial, dst, format);
 }
 
-typedef void(*SimdSynetFusedLayerForward3Ptr) (const float * src, const float * bias, const float * scale, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetFusedLayerForward3Ptr simdSynetFusedLayerForward3 = SIMD_FUNC4(SynetFusedLayerForward3, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetFusedLayerForward3(const float * src, const float * bias, const float * scale, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdSynetFusedLayerForward2(const float * src, const float * scale, const float * bias, size_t channels, size_t spatial, const float * slope, float * dst, SimdTensorFormatType format)
 {
-    simdSynetFusedLayerForward3(src, bias, scale, count, size, dst, trans);
+    typedef void(*SimdSynetFusedLayerForward2Ptr) (const float * src, const float * scale, const float * bias, size_t channels, size_t spatial, const float * slope, float * dst, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward2Ptr simdSynetFusedLayerForward2 = SIMD_FUNC4(SynetFusedLayerForward2, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward2(src, scale, bias, channels, spatial, slope, dst, format);
 }
 
-typedef void(*SimdSynetFusedLayerForward4Ptr) (const float * src, const float * bias0, const float * scale1, const float * bias1, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetFusedLayerForward4Ptr simdSynetFusedLayerForward4 = SIMD_FUNC4(SynetFusedLayerForward4, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetFusedLayerForward4(const float * src, const float * bias0, const float * scale1, const float * bias1, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdSynetFusedLayerForward3(const float * src, const float * bias, const float * scale, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
 {
-    simdSynetFusedLayerForward4(src, bias0, scale1, bias1, count, size, dst, trans);
+    typedef void(*SimdSynetFusedLayerForward3Ptr) (const float * src, const float * bias, const float * scale, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward3Ptr simdSynetFusedLayerForward3 = SIMD_FUNC4(SynetFusedLayerForward3, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward3(src, bias, scale, channels, spatial, dst, format);
 }
 
-typedef void(*SimdSynetInnerProductLayerForwardPtr) (const float * src, const float * weight, const float * bias, size_t count, size_t size, float * dst);
-volatile SimdSynetInnerProductLayerForwardPtr simdSynetInnerProductLayerForward = SIMD_FUNC5(SynetInnerProductLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+SIMD_API void SimdSynetFusedLayerForward4(const float * src, const float * bias0, const float * scale1, const float * bias1, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetFusedLayerForward4Ptr) (const float * src, const float * bias0, const float * scale1, const float * bias1, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward4Ptr simdSynetFusedLayerForward4 = SIMD_FUNC4(SynetFusedLayerForward4, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward4(src, bias0, scale1, bias1, channels, spatial, dst, format);
+}
+
+SIMD_API void SimdSynetFusedLayerForward8(const float * src0, const float * src1, const float * src2, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetFusedLayerForward8Ptr) (const float * src0, const float * src1, const float * src2, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward8Ptr simdSynetFusedLayerForward8 = SIMD_FUNC4(SynetFusedLayerForward8, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward8(src0, src1, src2, channels, spatial, dst, format);
+}
+
+SIMD_API void SimdSynetFusedLayerForward9(const float * src0, const float * src1, const float * scale, const float * bias, size_t channels0, size_t channels1, size_t spatial, float * dst0, float * dst1, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetFusedLayerForward9Ptr) (const float * src0, const float * src1, const float * scale, const float * bias, size_t channels0, size_t channels1, size_t spatial, float * dst0, float * dst1, SimdTensorFormatType format);
+    const static SimdSynetFusedLayerForward9Ptr simdSynetFusedLayerForward9 = SIMD_FUNC4(SynetFusedLayerForward9, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetFusedLayerForward9(src0, src1, scale, bias, channels0, channels1, spatial, dst0, dst1, format);
+}
+
+SIMD_API void SimdSynetHswish32f(const float * src, size_t size, const float * shift, const float * scale, float * dst)
+{
+    typedef void(*SimdSynetHswish32fPtr) (const float * src, size_t size, const float * shift, const float * scale, float * dst);
+    const static SimdSynetHswish32fPtr simdSynetHswish32f = SIMD_FUNC4(SynetHswish32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetHswish32f(src, size, shift, scale, dst);
+}
 
 SIMD_API void SimdSynetInnerProductLayerForward(const float * src, const float * weight, const float * bias, size_t count, size_t size, float * dst)
 {
+    typedef void(*SimdSynetInnerProductLayerForwardPtr) (const float * src, const float * weight, const float * bias, size_t count, size_t size, float * dst);
+    const static SimdSynetInnerProductLayerForwardPtr simdSynetInnerProductLayerForward = SIMD_FUNC5(SynetInnerProductLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
     simdSynetInnerProductLayerForward(src, weight, bias, count, size, dst);
 }
 
-typedef void(*SimdSynetLrnLayerCrossChannelsPtr) (const float * src, size_t half, size_t count, size_t size, const float * k, float * dst);
-volatile SimdSynetLrnLayerCrossChannelsPtr simdSynetLrnLayerCrossChannels = SIMD_FUNC4(SynetLrnLayerCrossChannels, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetLrnLayerCrossChannels(const float * src, size_t half, size_t count, size_t size, const float * k, float * dst)
+SIMD_API void SimdSynetInnerProduct8i(size_t M, size_t N, size_t K, const uint8_t* src, const int8_t* weight, int32_t* dst, SimdSynetCompatibilityType compatibility)
 {
-    simdSynetLrnLayerCrossChannels(src, half, count, size, k, dst);
+    typedef void(*SimdSynetInnerProduct8iPtr) (size_t M, size_t N, size_t K, const uint8_t* src, const int8_t* weight, int32_t* dst, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetInnerProduct8iPtr simdSynetInnerProduct8i = SIMD_FUNC3(SynetInnerProduct8i, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC);
+
+    simdSynetInnerProduct8i(M, N, K, src, weight, dst, compatibility);
 }
 
-typedef void(*SimdSynetPoolingForwardPtr) (const float * src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
-    size_t strideY, size_t strideX, size_t padY, size_t padX, float * dst, size_t dstH, size_t dstW, SimdBool trans);
-
-volatile SimdSynetPoolingForwardPtr simdSynetPoolingForwardMax = SIMD_FUNC5(SynetPoolingForwardMax, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetPoolingForwardMax(const float * src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
-    size_t strideY, size_t strideX, size_t padY, size_t padX, float * dst, size_t dstH, size_t dstW, SimdBool trans)
+SIMD_API void SimdSynetLrnLayerCrossChannels(const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst, SimdTensorFormatType format)
 {
-    simdSynetPoolingForwardMax(src, srcC, srcH, srcW, kernelY, kernelX, strideY, strideX, padY, padX, dst, dstH, dstW, trans);
+    typedef void(*SimdSynetLrnLayerCrossChannelsPtr) (const float * src, size_t half, size_t channels, size_t spatial, const float * k, float * dst, SimdTensorFormatType format);
+    const static SimdSynetLrnLayerCrossChannelsPtr simdSynetLrnLayerCrossChannels = SIMD_FUNC4(SynetLrnLayerCrossChannels, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetLrnLayerCrossChannels(src, half, channels, spatial, k, dst, format);
 }
 
-typedef void(*SimdSynetPreluLayerForwardPtr) (const float * src, const float * slope, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetPreluLayerForwardPtr simdSynetPreluLayerForward = SIMD_FUNC4(SynetPreluLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetPreluLayerForward(const float * src, const float * slope, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API void * SimdSynetMergedConvolution32fInit(size_t batch, const SimdConvolutionParameters * convs, size_t count, SimdBool add)
 {
-    simdSynetPreluLayerForward(src, slope, count, size, dst, trans);
+    typedef void* (*SimdSynetMergedConvolution32fInitPtr) (size_t batch, const SimdConvolutionParameters * convs, size_t count, SimdBool add);
+    const static SimdSynetMergedConvolution32fInitPtr simdSynetMergedConvolution32fInit = SIMD_FUNC5(SynetMergedConvolution32fInit, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    return simdSynetMergedConvolution32fInit(batch, convs, count, add);
 }
 
-typedef void(*SimdSynetRestrictRangePtr) (const float * src, size_t size, const float * lower, const float * upper, float * dst);
-volatile SimdSynetRestrictRangePtr simdSynetRestrictRange = SIMD_FUNC4(SynetRestrictRange, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetRestrictRange(const float * src, size_t size, const float * lower, const float * upper, float * dst)
+SIMD_API size_t SimdSynetMergedConvolution32fExternalBufferSize(const void * context)
 {
-    simdSynetRestrictRange(src, size, lower, upper, dst);
+    return ((SynetMergedConvolution32f*)context)->ExternalBufferSize();
 }
 
-typedef void(*SimdSynetScaleLayerForwardPtr) (const float * src, const float * scale, const float * bias, size_t count, size_t size, float * dst, SimdBool trans);
-volatile SimdSynetScaleLayerForwardPtr simdSynetScaleLayerForward = SIMD_FUNC5(SynetScaleLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdSynetScaleLayerForward(const float * src, const float * scale, const float * bias, size_t count, size_t size, float * dst, SimdBool trans)
+SIMD_API size_t SimdSynetMergedConvolution32fInternalBufferSize(const void * context)
 {
-    simdSynetScaleLayerForward(src, scale, bias, count, size, dst, trans);
+    return ((SynetMergedConvolution32f*)context)->InternalBufferSize();
 }
 
-typedef void(*SimdSynetSoftmaxLayerForwardPtr) (const float * src, size_t outer, size_t count, size_t inner, float * dst);
-volatile SimdSynetSoftmaxLayerForwardPtr simdSynetSoftmaxLayerForward = SIMD_FUNC4(SynetSoftmaxLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+SIMD_API void SimdSynetMergedConvolution32fSetParams(void * context, const float * const * weight, SimdBool * internal, const float * const * bias, const float * const * params)
+{
+    ((SynetMergedConvolution32f*)context)->SetParams(weight, internal, bias, params);
+}
+
+SIMD_API void SimdSynetMergedConvolution32fForward(void * context, const float * src, float * buf, float * dst)
+{
+    SynetMergedConvolution32f * c = (SynetMergedConvolution32f*)context;
+    SIMD_PERF_EXT(c);
+    c->Forward(src, buf, dst);
+}
+
+SIMD_API void* SimdSynetMergedConvolution8iInit(size_t batch, const SimdConvolutionParameters* convs, size_t count, SimdSynetCompatibilityType compatibility)
+{
+    typedef void* (*SimdSynetMergedConvolution8iInitPtr) (size_t batch, const SimdConvolutionParameters* convs, size_t count, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetMergedConvolution8iInitPtr simdSynetMergedConvolution8iInit = SIMD_FUNC0(SynetMergedConvolution8iInit);// , SIMD_AVX512VNNI_FUNC, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC);
+
+    return simdSynetMergedConvolution8iInit(batch, convs, count, compatibility);
+}
+
+SIMD_API size_t SimdSynetMergedConvolution8iExternalBufferSize(const void* context)
+{
+    return ((SynetMergedConvolution8i*)context)->ExternalBufferSize();
+}
+
+SIMD_API size_t SimdSynetMergedConvolution8iInternalBufferSize(const void* context)
+{
+    return ((SynetMergedConvolution8i*)context)->InternalBufferSize();
+}
+
+SIMD_API void SimdSynetMergedConvolution8iSetParams(void* context, const float* const* weight, SimdBool* internal, const float* const* bias, const float* const* params, const float* const* stats)
+{
+    ((SynetMergedConvolution8i*)context)->SetParams(weight, internal, bias, params, stats);
+}
+
+SIMD_API void SimdSynetMergedConvolution8iForward(void* context, const uint8_t* src, uint8_t* buf, uint8_t* dst)
+{
+    SynetMergedConvolution8i* c = (SynetMergedConvolution8i*)context;
+    SIMD_PERF_EXT(c);
+    c->Forward(src, buf, dst);
+}
+
+void SimdSynetPoolingForwardAverage(const float* src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
+    size_t strideY, size_t strideX, size_t padY, size_t padX, float* dst, size_t dstH, size_t dstW, SimdBool excludePad, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetPoolingForwardAveragePtr) (const float* src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
+        size_t strideY, size_t strideX, size_t padY, size_t padX, float* dst, size_t dstH, size_t dstW, SimdBool exludePad, SimdTensorFormatType format);
+    const static SimdSynetPoolingForwardAveragePtr simdSynetPoolingForwardAverage = SIMD_FUNC4(SynetPoolingForwardAverage, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetPoolingForwardAverage(src, srcC, srcH, srcW, kernelY, kernelX, strideY, strideX, padY, padX, dst, dstH, dstW, excludePad, format);
+}
+
+SIMD_API void SimdSynetPoolingForwardMax32f(const float * src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
+    size_t strideY, size_t strideX, size_t padY, size_t padX, float * dst, size_t dstH, size_t dstW, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetPoolingForwardMax32fPtr) (const float * src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
+        size_t strideY, size_t strideX, size_t padY, size_t padX, float * dst, size_t dstH, size_t dstW, SimdTensorFormatType format);
+    const static SimdSynetPoolingForwardMax32fPtr simdSynetPoolingForwardMax32f = SIMD_FUNC5(SynetPoolingForwardMax32f, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetPoolingForwardMax32f(src, srcC, srcH, srcW, kernelY, kernelX, strideY, strideX, padY, padX, dst, dstH, dstW, format);
+}
+
+SIMD_API void SimdSynetPoolingForwardMax8u(const uint8_t* src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
+    size_t strideY, size_t strideX, size_t padY, size_t padX, uint8_t* dst, size_t dstH, size_t dstW, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetPoolingForwardMax8uPtr) (const uint8_t* src, size_t srcC, size_t srcH, size_t srcW, size_t kernelY, size_t kernelX,
+        size_t strideY, size_t strideX, size_t padY, size_t padX, uint8_t* dst, size_t dstH, size_t dstW, SimdTensorFormatType format);
+    const static SimdSynetPoolingForwardMax8uPtr simdSynetPoolingForwardMax8u = SIMD_FUNC4(SynetPoolingForwardMax8u, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetPoolingForwardMax8u(src, srcC, srcH, srcW, kernelY, kernelX, strideY, strideX, padY, padX, dst, dstH, dstW, format);
+}
+
+SIMD_API void SimdSynetPreluLayerForward(const float * src, const float * slope, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format)
+{
+    typedef void(*SimdSynetPreluLayerForwardPtr) (const float * src, const float * slope, size_t channels, size_t spatial, float * dst, SimdTensorFormatType format);
+    const static SimdSynetPreluLayerForwardPtr simdSynetPreluLayerForward = SIMD_FUNC4(SynetPreluLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetPreluLayerForward(src, slope, channels, spatial, dst, format);
+}
+
+SIMD_API void SimdSynetRelu32f(const float* src, size_t size, const float* slope, float* dst)
+{
+    typedef void(*SimdSynetRelu32fPtr) (const float* src, size_t size, const float* slope, float* dst);
+    const static SimdSynetRelu32fPtr simdSynetRelu32f = SIMD_FUNC4(SynetRelu32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetRelu32f(src, size, slope, dst);
+}
+
+SIMD_API void SimdSynetReorderImage(size_t batch, size_t channels, size_t spatial, const float* src, SimdTensorFormatType srcFormat, float* dst, SimdTensorFormatType dstFormat)
+{
+    typedef void(*SimdSynetReorderImagePtr) (size_t batch, size_t channels, size_t spatial, const float* src, SimdTensorFormatType srcFormat, float* dst, SimdTensorFormatType dstFormat);
+    const static SimdSynetReorderImagePtr simdSynetReorderImage = SIMD_FUNC4(SynetReorderImage, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetReorderImage(batch, channels, spatial, src, srcFormat, dst, dstFormat);
+}
+
+SIMD_API void SimdSynetReorderFilter(size_t output, size_t input, size_t kernel, const float* src, SimdTensorFormatType srcFormat, float* dst, SimdTensorFormatType dstFormat)
+{
+    typedef void(*SimdSynetReorderFilterPtr) (size_t output, size_t input, size_t kernel, const float* src, SimdTensorFormatType srcFormat, float* dst, SimdTensorFormatType dstFormat);
+    const static SimdSynetReorderFilterPtr simdSynetReorderFilter = SIMD_FUNC4(SynetReorderFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetReorderFilter(output, input, kernel, src, srcFormat, dst, dstFormat);
+}
+
+SIMD_API void SimdSynetRestrictRange32f(const float * src, size_t size, const float * lower, const float * upper, float * dst)
+{
+    typedef void(*SimdSynetRestrictRange32fPtr) (const float * src, size_t size, const float * lower, const float * upper, float * dst);
+    const static SimdSynetRestrictRange32fPtr simdSynetRestrictRange32f = SIMD_FUNC4(SynetRestrictRange32f, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetRestrictRange32f(src, size, lower, upper, dst);
+}
+
+SIMD_API void SimdSynetScaleLayerForward(const float* src, const float* scale, const float* bias, size_t channels, size_t height, size_t width, float* dst, SimdTensorFormatType format, SimdSynetCompatibilityType compatibility)
+{
+    typedef void(*SimdSynetScaleLayerForwardPtr) (const float* src, const float* scale, const float* bias, size_t channels, size_t height, size_t width, float* dst, SimdTensorFormatType format, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetScaleLayerForwardPtr simdSynetScaleLayerForward = SIMD_FUNC5(SynetScaleLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetScaleLayerForward(src, scale, bias, channels, height, width, dst, format, compatibility);
+}
+
+SIMD_API void* SimdSynetScale8iInit(size_t batch, size_t channels, size_t spatial, SimdTensorDataType srcType, SimdTensorDataType dstType, SimdTensorFormatType format, SimdSynetCompatibilityType compatibility)
+{
+    typedef void* (*SimdSynetScale8iInitPtr) (size_t batch, size_t channels, size_t spatial, SimdTensorDataType srcType, SimdTensorDataType dstType, SimdTensorFormatType format, SimdSynetCompatibilityType compatibility);
+    const static SimdSynetScale8iInitPtr simdSynetScale8iInit = SIMD_FUNC3(SynetScale8iInit, SIMD_AVX512BW_FUNC, SIMD_AVX2_FUNC, SIMD_SSE41_FUNC);
+
+    return simdSynetScale8iInit(batch, channels, spatial, srcType, dstType, format, compatibility);
+}
+
+SIMD_API size_t SimdSynetScale8iInternalBufferSize(const void* context)
+{
+    return ((Base::SynetScale8i*)context)->InternalBufferSize();
+}
+
+SIMD_API void SimdSynetScale8iSetParams(void* context, const float* weight, const float* bias, const float* const* stats)
+{
+    ((Base::SynetScale8i*)context)->SetParams(weight, bias, stats);
+}
+
+SIMD_API void SimdSynetScale8iForward(void* context, const uint8_t* src, uint8_t* dst)
+{
+    ((Base::SynetScale8i*)context)->Forward(src, dst);
+}
+
+SIMD_API void SimdSynetSetInput(const uint8_t * src, size_t width, size_t height, size_t stride, SimdPixelFormatType srcFormat,
+    const float * lower, const float * upper, float * dst, size_t channels, SimdTensorFormatType dstFormat)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable && width >= Avx512bw::A)
+        Avx512bw::SynetSetInput(src, width, height, stride, srcFormat, lower, upper, dst, channels, dstFormat);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::SynetSetInput(src, width, height, stride, srcFormat, lower, upper, dst, channels, dstFormat);
+    else
+#endif
+#ifdef SIMD_SSE41_ENABLE
+    if (Sse41::Enable && width >= Sse41::A)
+        Sse41::SynetSetInput(src, width, height, stride, srcFormat, lower, upper, dst, channels, dstFormat);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::SynetSetInput(src, width, height, stride, srcFormat, lower, upper, dst, channels, dstFormat);
+    else
+#endif
+        Base::SynetSetInput(src, width, height, stride, srcFormat, lower, upper, dst, channels, dstFormat);
+}
+
+SIMD_API void SimdSynetShuffleLayerForward(const float* src0, const float* src1, size_t channels0, size_t channels1, size_t spatial, float* dst0, float* dst1, SimdTensorFormatType format, int type)
+{
+    typedef void(*SimdSynetShuffleLayerForwardPtr) (const float* src0, const float* src1, size_t channels0, size_t channels1, size_t spatial, float* dst0, float* dst1, SimdTensorFormatType format, int type);
+    const static SimdSynetShuffleLayerForwardPtr simdSynetShuffleLayerForward = SIMD_FUNC4(SynetShuffleLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetShuffleLayerForward(src0, src1, channels0, channels1, spatial, dst0, dst1, format, type);
+}
+
+SIMD_API void SimdSynetSigmoid32f(const float* src, size_t size, const float* slope, float* dst)
+{
+    typedef void(*SimdSynetSigmoid32fPtr) (const float* src, size_t size, const float* slope, float* dst);
+    const static SimdSynetSigmoid32fPtr simdSynetSigmoid32f = SIMD_FUNC4(SynetSigmoid32f, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetSigmoid32f(src, size, slope, dst);
+}
 
 SIMD_API void SimdSynetSoftmaxLayerForward(const float * src, size_t outer, size_t count, size_t inner, float * dst)
 {
+    typedef void(*SimdSynetSoftmaxLayerForwardPtr) (const float * src, size_t outer, size_t count, size_t inner, float * dst);
+    const static SimdSynetSoftmaxLayerForwardPtr simdSynetSoftmaxLayerForward = SIMD_FUNC4(SynetSoftmaxLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
     simdSynetSoftmaxLayerForward(src, outer, count, inner, dst);
+}
+
+SIMD_API void SimdSynetSoftplus32f(const float* src, size_t size, const float* beta, const float* threshold, float* dst)
+{
+    typedef void(*SimdSynetSoftplus32fPtr) (const float* src, size_t size, const float* beta, const float* threshold, float* dst);
+    const static SimdSynetSoftplus32fPtr simdSynetSoftplus32f = SIMD_FUNC4(SynetSoftplus32f, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetSoftplus32f(src, size, beta, threshold, dst);
+}
+
+SIMD_API SimdTensorFormatType SimdSynetSpecifyTensorFormat(SimdTensorFormatType format)
+{
+    return Base::SynetSpecifyTensorFormat(format);
+}
+
+SIMD_API void SimdSynetTanh32f(const float* src, size_t size, const float* slope, float* dst)
+{
+    typedef void(*SimdSynetTanh32fPtr) (const float* src, size_t size, const float* slope, float* dst);
+    const static SimdSynetTanh32fPtr simdSynetTanh32f = SIMD_FUNC4(SynetTanh32f, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetTanh32f(src, size, slope, dst);
+}
+
+
+SIMD_API size_t SimdSynetTensorAlignment(SimdTensorFormatType format)
+{
+    return Base::SynetTensorAlignment(format);
+}
+
+SIMD_API void SimdSynetUnaryOperation32fLayerForward(const float* src, size_t size, SimdSynetUnaryOperation32fType type, float* dst)
+{
+    typedef void(*SimdSynetUnaryOperation32fLayerForwardPtr) (const float* src, size_t size, SimdSynetUnaryOperation32fType type, float* dst);
+    const static SimdSynetUnaryOperation32fLayerForwardPtr simdSynetUnaryOperation32fLayerForward = SIMD_FUNC4(SynetUnaryOperation32fLayerForward, SIMD_AVX512F_FUNC, SIMD_AVX2_FUNC, SIMD_SSE2_FUNC, SIMD_NEON_FUNC);
+
+    simdSynetUnaryOperation32fLayerForward(src, size, type, dst);
 }
 
 SIMD_API void SimdTextureBoostedSaturatedGradient(const uint8_t * src, size_t srcStride, size_t width, size_t height,
@@ -5354,45 +5875,161 @@ SIMD_API void SimdTransformImage(const uint8_t * src, size_t srcStride, size_t w
 }
 
 typedef void(*SimdWinogradSetFilterPtr) (const float * src, size_t size, float * dst, SimdBool trans);
-typedef void(*SimdWinogradSetInputPtr) (const float * src, size_t srcChannels, size_t srcHeight, size_t srcWidth, float * dst, SimdBool pad, SimdBool trans);
-typedef void(*SimdWinogradSetOutputPtr) (const float * src, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans);
+typedef void(*SimdWinogradSetInputPtr) (const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth, size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans);
+typedef void(*SimdWinogradSetOutputPtr) (const float * src, size_t srcStride, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans);
 
-volatile SimdWinogradSetFilterPtr simdWinograd2x3SetFilter = SIMD_FUNC4(Winograd2x3SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdWinograd2x3SetFilter(const float * src, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdWinogradKernel1x3Block1x4SetFilter(const float* src, size_t size, float* dst, SimdBool trans)
 {
-    simdWinograd2x3SetFilter(src, size, dst, trans);
+    const static SimdWinogradSetFilterPtr simdWinogradKernel1x3Block1x4SetFilter = SIMD_FUNC4(WinogradKernel1x3Block1x4SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel1x3Block1x4SetFilter(src, size, dst, trans);
 }
 
-volatile SimdWinogradSetInputPtr simdWinograd2x3SetInput = SIMD_FUNC4(Winograd2x3SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdWinograd2x3SetInput(const float * src, size_t srcChannels, size_t srcHeight, size_t srcWidth, float * dst, SimdBool pad, SimdBool trans)
+SIMD_API void SimdWinogradKernel1x3Block1x4SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
 {
-    simdWinograd2x3SetInput(src, srcChannels, srcHeight, srcWidth, dst, pad, trans);
+    const static SimdWinogradSetInputPtr simdWinogradKernel1x3Block1x4SetInput = SIMD_FUNC4(WinogradKernel1x3Block1x4SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel1x3Block1x4SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
 }
 
-volatile SimdWinogradSetOutputPtr simdWinograd2x3SetOutput = SIMD_FUNC4(Winograd2x3SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdWinograd2x3SetOutput(const float * src, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+SIMD_API void SimdWinogradKernel1x3Block1x4SetOutput(const float* src, size_t srcStride, float* dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
 {
-    simdWinograd2x3SetOutput(src, dst, dstChannels, dstHeight, dstWidth, trans);
+    const static SimdWinogradSetOutputPtr simdWinogradKernel1x3Block1x4SetOutput = SIMD_FUNC4(WinogradKernel1x3Block1x4SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel1x3Block1x4SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
 }
 
-volatile SimdWinogradSetFilterPtr simdWinograd4x3SetFilter = SIMD_FUNC4(Winograd4x3SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
-
-SIMD_API void SimdWinograd4x3SetFilter(const float * src, size_t size, float * dst, SimdBool trans)
+SIMD_API void SimdWinogradKernel1x5Block1x4SetFilter(const float* src, size_t size, float* dst, SimdBool trans)
 {
-    simdWinograd4x3SetFilter(src, size, dst, trans);
+    const static SimdWinogradSetFilterPtr simdWinogradKernel1x5Block1x4SetFilter = SIMD_FUNC4(WinogradKernel1x5Block1x4SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel1x5Block1x4SetFilter(src, size, dst, trans);
 }
 
-SIMD_API void SimdWinograd4x3SetInput(const float * src, size_t srcChannels, size_t srcHeight, size_t srcWidth, float * dst, SimdBool pad, SimdBool trans)
+SIMD_API void SimdWinogradKernel1x5Block1x4SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
 {
-    Base::Winograd4x3SetInput(src, srcChannels, srcHeight, srcWidth, dst, pad, trans);
+    const static SimdWinogradSetInputPtr simdWinogradKernel1x5Block1x4SetInput = SIMD_FUNC4(WinogradKernel1x5Block1x4SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel1x5Block1x4SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
 }
 
-SIMD_API void SimdWinograd4x3SetOutput(const float * src, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+SIMD_API void SimdWinogradKernel1x5Block1x4SetOutput(const float* src, size_t srcStride, float* dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
 {
-    Base::Winograd4x3SetOutput(src, dst, dstChannels, dstHeight, dstWidth, trans);
+    const static SimdWinogradSetOutputPtr simdWinogradKernel1x5Block1x4SetOutput = SIMD_FUNC4(WinogradKernel1x5Block1x4SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel1x5Block1x4SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
+}
+
+SIMD_API void SimdWinogradKernel2x2Block2x2SetFilter(const float* src, size_t size, float* dst, SimdBool trans)
+{
+    const static SimdWinogradSetFilterPtr simdWinogradKernel2x2Block2x2SetFilter = SIMD_FUNC4(WinogradKernel2x2Block2x2SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel2x2Block2x2SetFilter(src, size, dst, trans);
+}
+
+SIMD_API void SimdWinogradKernel2x2Block2x2SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
+{
+    const static SimdWinogradSetInputPtr simdWinogradKernel2x2Block2x2SetInput = SIMD_FUNC4(WinogradKernel2x2Block2x2SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel2x2Block2x2SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
+}
+
+SIMD_API void SimdWinogradKernel2x2Block2x2SetOutput(const float* src, size_t srcStride, float* dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+{
+    const static SimdWinogradSetOutputPtr simdWinogradKernel2x2Block2x2SetOutput = SIMD_FUNC4(WinogradKernel2x2Block2x2SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel2x2Block2x2SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
+}
+
+SIMD_API void SimdWinogradKernel2x2Block4x4SetFilter(const float* src, size_t size, float* dst, SimdBool trans)
+{
+    const static SimdWinogradSetFilterPtr simdWinogradKernel2x2Block4x4SetFilter = SIMD_FUNC4(WinogradKernel2x2Block4x4SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel2x2Block4x4SetFilter(src, size, dst, trans);
+}
+
+SIMD_API void SimdWinogradKernel2x2Block4x4SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
+{
+    const static SimdWinogradSetInputPtr simdWinogradKernel2x2Block4x4SetInput = SIMD_FUNC4(WinogradKernel2x2Block4x4SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel2x2Block4x4SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
+}
+
+SIMD_API void SimdWinogradKernel2x2Block4x4SetOutput(const float* src, size_t srcStride, float* dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+{
+    const static SimdWinogradSetOutputPtr simdWinogradKernel2x2Block4x4SetOutput = SIMD_FUNC4(WinogradKernel2x2Block4x4SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel2x2Block4x4SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block2x2SetFilter(const float * src, size_t size, float * dst, SimdBool trans)
+{
+    const static SimdWinogradSetFilterPtr simdWinogradKernel3x3Block2x2SetFilter = SIMD_FUNC4(WinogradKernel3x3Block2x2SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block2x2SetFilter(src, size, dst, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block2x2SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
+{
+    const static SimdWinogradSetInputPtr simdWinogradKernel3x3Block2x2SetInput = SIMD_FUNC4(WinogradKernel3x3Block2x2SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block2x2SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block2x2SetOutput(const float * src, size_t srcStride, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+{
+    const static SimdWinogradSetOutputPtr simdWinogradKernel3x3Block2x2SetOutput = SIMD_FUNC4(WinogradKernel3x3Block2x2SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block2x2SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block3x3SetFilter(const float * src, size_t size, float * dst, SimdBool trans)
+{
+    const static SimdWinogradSetFilterPtr simdWinogradKernel3x3Block3x3SetFilter = SIMD_FUNC4(WinogradKernel3x3Block3x3SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block3x3SetFilter(src, size, dst, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block3x3SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
+{
+    const static SimdWinogradSetInputPtr simdWinogradKernel3x3Block3x3SetInput = SIMD_FUNC4(WinogradKernel3x3Block3x3SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC); 
+
+    simdWinogradKernel3x3Block3x3SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block3x3SetOutput(const float * src, size_t srcStride, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+{
+    const static SimdWinogradSetOutputPtr simdWinogradKernel3x3Block3x3SetOutput = SIMD_FUNC4(WinogradKernel3x3Block3x3SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block3x3SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block4x4SetFilter(const float * src, size_t size, float * dst, SimdBool trans)
+{
+    const static SimdWinogradSetFilterPtr simdWinogradKernel3x3Block4x4SetFilter = SIMD_FUNC4(WinogradKernel3x3Block4x4SetFilter, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block4x4SetFilter(src, size, dst, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block4x4SetInput(const float* src, size_t srcChannels, size_t srcHeight, size_t srcWidth,
+    size_t padY, size_t padX, size_t padH, size_t padW, float* dst, size_t dstStride, SimdBool trans)
+{
+    const static SimdWinogradSetInputPtr simdWinogradKernel3x3Block4x4SetInput = SIMD_FUNC4(WinogradKernel3x3Block4x4SetInput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block4x4SetInput(src, srcChannels, srcHeight, srcWidth, padY, padX, padH, padW, dst, dstStride, trans);
+}
+
+SIMD_API void SimdWinogradKernel3x3Block4x4SetOutput(const float * src, size_t srcStride, float * dst, size_t dstChannels, size_t dstHeight, size_t dstWidth, SimdBool trans)
+{
+    const static SimdWinogradSetOutputPtr simdWinogradKernel3x3Block4x4SetOutput = SIMD_FUNC4(WinogradKernel3x3Block4x4SetOutput, SIMD_AVX512F_FUNC, SIMD_AVX_FUNC, SIMD_SSE_FUNC, SIMD_NEON_FUNC);
+
+    simdWinogradKernel3x3Block4x4SetOutput(src, srcStride, dst, dstChannels, dstHeight, dstWidth, trans);
 }
 
 SIMD_API void SimdYuva420pToBgra(const uint8_t * y, size_t yStride, const uint8_t * u, size_t uStride, const uint8_t * v, size_t vStride,
@@ -5679,6 +6316,84 @@ SIMD_API void SimdYuv444pToHue(const uint8_t * y, size_t yStride, const uint8_t 
     else
 #endif
         Base::Yuv444pToHue(y, yStride, u, uStride, v, vStride, width, height, hue, hueStride);
+}
+
+SIMD_API void SimdYuv420pToRgb(const uint8_t* y, size_t yStride, const uint8_t* u, size_t uStride, const uint8_t* v, size_t vStride,
+    size_t width, size_t height, uint8_t* rgb, size_t rgbStride)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::Yuv420pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::DA)
+        Avx2::Yuv420pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::DA)
+        Ssse3::Yuv420pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::DA)
+        Neon::Yuv420pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+        Base::Yuv420pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+}
+
+SIMD_API void SimdYuv422pToRgb(const uint8_t* y, size_t yStride, const uint8_t* u, size_t uStride, const uint8_t* v, size_t vStride,
+    size_t width, size_t height, uint8_t* rgb, size_t rgbStride)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::Yuv422pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::DA)
+        Avx2::Yuv422pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::DA)
+        Ssse3::Yuv422pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::DA)
+        Neon::Yuv422pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+        Base::Yuv422pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+}
+
+SIMD_API void SimdYuv444pToRgb(const uint8_t* y, size_t yStride, const uint8_t* u, size_t uStride, const uint8_t* v, size_t vStride,
+    size_t width, size_t height, uint8_t* rgb, size_t rgbStride)
+{
+#ifdef SIMD_AVX512BW_ENABLE
+    if (Avx512bw::Enable)
+        Avx512bw::Yuv444pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_AVX2_ENABLE
+    if (Avx2::Enable && width >= Avx2::A)
+        Avx2::Yuv444pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_SSSE3_ENABLE
+    if (Ssse3::Enable && width >= Ssse3::A)
+        Ssse3::Yuv444pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+#ifdef SIMD_NEON_ENABLE
+    if (Neon::Enable && width >= Neon::A)
+        Neon::Yuv444pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
+    else
+#endif
+        Base::Yuv444pToRgb(y, yStride, u, uStride, v, vStride, width, height, rgb, rgbStride);
 }
 
 

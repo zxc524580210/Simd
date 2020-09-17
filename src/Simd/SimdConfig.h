@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -44,6 +44,8 @@
 
 //#define SIMD_AVX512BW_DISABLE
 
+//#define SIMD_AVX512VNNI_DISABLE
+
 //#define SIMD_VMX_DISABLE
 
 //#define SIMD_VSX_DISABLE
@@ -74,6 +76,8 @@
 
 //#define SIMD_PERFORMANCE_STATISTIC
 
-//#define SIMD_RUNTIME_GEMM_STATISTIC
+//#define SIMD_RUNTIME_STATISTIC
+
+//#define SIMD_FUTURE_DISABLE
 
 #endif//__SimdConfig_h__

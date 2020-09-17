@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar,
+* Copyright (c) 2011-2020 Yermalayeu Ihar,
 *               2014-2015 Antonenka Mikhail.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -88,6 +88,13 @@ namespace Simd
             bgra[1] = YuvToGreen(y, u, v);
             bgra[2] = YuvToRed(y, v);
             bgra[3] = alpha;
+        }
+
+        SIMD_INLINE void YuvToRgb(int y, int u, int v, uint8_t* rgb)
+        {
+            rgb[0] = YuvToRed(y, v);
+            rgb[1] = YuvToGreen(y, u, v);
+            rgb[2] = YuvToBlue(y, u);
         }
 
         SIMD_INLINE void BgrToHsv(int blue, int green, int red, uint8_t * hsv)
@@ -704,12 +711,24 @@ namespace Simd
 
         template<> SIMD_INLINE __m256i BgrToBgra<false>(const __m256i & bgr, const __m256i & alpha)
         {
-            return _mm256_or_si256(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(bgr, 0x94), K8_BGRA_TO_BGR_SHUFFLE), alpha);
+            return _mm256_or_si256(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(bgr, 0x94), K8_BGR_TO_BGRA_SHUFFLE), alpha);
         }
 
         template<> SIMD_INLINE __m256i BgrToBgra<true>(const __m256i & bgr, const __m256i & alpha)
         {
-            return _mm256_or_si256(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(bgr, 0xE9), K8_BGRA_TO_BGR_SHUFFLE), alpha);
+            return _mm256_or_si256(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(bgr, 0xE9), K8_BGR_TO_BGRA_SHUFFLE), alpha);
+        }
+
+        template<bool tail> __m256i RgbToBgra(const __m256i & rgb, const __m256i & alpha);
+
+        template<> SIMD_INLINE __m256i RgbToBgra<false>(const __m256i & rgb, const __m256i & alpha)
+        {
+            return _mm256_or_si256(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(rgb, 0x94), K8_RGB_TO_BGRA_SHUFFLE), alpha);
+        }
+
+        template<> SIMD_INLINE __m256i RgbToBgra<true>(const __m256i & rgb, const __m256i & alpha)
+        {
+            return _mm256_or_si256(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(rgb, 0xE9), K8_RGB_TO_BGRA_SHUFFLE), alpha);
         }
     }
 #endif// SIMD_AVX2_ENABLE
@@ -1159,6 +1178,15 @@ namespace Simd
             bgr.val[0] = PackSaturatedI16(YuvToBlue(yLo, uLo), YuvToBlue(yHi, uHi));
             bgr.val[1] = PackSaturatedI16(YuvToGreen(yLo, uLo, vLo), YuvToGreen(yHi, uHi, vHi));
             bgr.val[2] = PackSaturatedI16(YuvToRed(yLo, vLo), YuvToRed(yHi, vHi));
+        }
+
+        SIMD_INLINE void YuvToRgb(uint8x16_t y, uint8x16_t u, uint8x16_t v, uint8x16x3_t& rgb)
+        {
+            int16x8_t yLo = AdjustY<0>(y), uLo = AdjustUV<0>(u), vLo = AdjustUV<0>(v);
+            int16x8_t yHi = AdjustY<1>(y), uHi = AdjustUV<1>(u), vHi = AdjustUV<1>(v);
+            rgb.val[0] = PackSaturatedI16(YuvToRed(yLo, vLo), YuvToRed(yHi, vHi));
+            rgb.val[1] = PackSaturatedI16(YuvToGreen(yLo, uLo, vLo), YuvToGreen(yHi, uHi, vHi));
+            rgb.val[2] = PackSaturatedI16(YuvToBlue(yLo, uLo), YuvToBlue(yHi, uHi));
         }
     }
 #endif// SIMD_NEON_ENABLE

@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -795,7 +795,7 @@ namespace Simd
                     _filter[i] = vdupq_n_f32(filter[i]);
 
                 size_t alignedWidth = AlignLo(width, F);
-                float32x4_t tailMask = RightNotZero(width - alignedWidth);
+                float32x4_t tailMask = RightNotZero32f(width - alignedWidth);
 
                 for (size_t row = 0; row < height; ++row)
                 {
@@ -851,12 +851,12 @@ namespace Simd
             for (size_t row = 0; row < height; ++row)
             {
                 val = vaddq_f32(Load<false>(a + 0), Load<false>(b + 0));
+                idx = vbslq_u32(vcgtq_f32(val, max), cur, idx);
                 max = vmaxq_f32(max, val);
-                idx = vbslq_u32(vceqq_f32(max, val), cur, idx);
                 cur = vaddq_u32(cur, K32_00000003);
                 val = vaddq_f32(Load<false>(a + 3), Load<false>(b + 3));
+                idx = vbslq_u32(vcgtq_f32(val, max), cur, idx);
                 max = vmaxq_f32(max, val);
-                idx = vbslq_u32(vceqq_f32(max, val), cur, idx);
                 cur = vaddq_u32(cur, K32_00000005);
                 a += aStride;
                 b += bStride;
@@ -872,6 +872,11 @@ namespace Simd
                 if (_max[i] > *pValue)
                 {
                     *pValue = _max[i];
+                    *pCol = _idx[i] & 7;
+                    *pRow = _idx[i] / 8;
+                }
+                else if (_max[i] == *pValue && *pRow > _idx[i] / 8)
+                {
                     *pCol = _idx[i] & 7;
                     *pRow = _idx[i] / 8;
                 }

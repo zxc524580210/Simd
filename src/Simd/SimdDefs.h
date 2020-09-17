@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -36,10 +36,61 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <cmath>
+#include <limits>
+
+#if defined(SIMD_SSE_DISABLE) && !defined(SIMD_SSE2_DISABLE)
+#define SIMD_SSE2_DISABLE
+#endif
+
+#if defined(SIMD_SSE2_DISABLE) && !defined(SIMD_SSE3_DISABLE)
+#define SIMD_SSE3_DISABLE
+#endif
+
+#if defined(SIMD_SSE3_DISABLE) && !defined(SIMD_SSSE3_DISABLE)
+#define SIMD_SSSE3_DISABLE
+#endif
+
+#if defined(SIMD_SSSE3_DISABLE) && !defined(SIMD_SSE41_DISABLE)
+#define SIMD_SSE41_DISABLE
+#endif
+
+#if defined(SIMD_SSE41_DISABLE) && !defined(SIMD_SSE42_DISABLE)
+#define SIMD_SSE42_DISABLE
+#endif
+
+#if defined(SIMD_SSE41_DISABLE) && !defined(SIMD_SSE42_DISABLE)
+#define SIMD_SSE42_DISABLE
+#endif
+
+#if defined(SIMD_SSE42_DISABLE) && !defined(SIMD_AVX_DISABLE)
+#define SIMD_AVX_DISABLE
+#endif
+
+#if defined(SIMD_AVX_DISABLE) && !defined(SIMD_AVX2_DISABLE)
+#define SIMD_AVX2_DISABLE
+#endif
+
+#if defined(SIMD_AVX2_DISABLE) && !defined(SIMD_AVX512F_DISABLE)
+#define SIMD_AVX512F_DISABLE
+#endif
+
+#if defined(SIMD_AVX512F_DISABLE) && !defined(SIMD_AVX512BW_DISABLE)
+#define SIMD_AVX512BW_DISABLE
+#endif
+
+#if defined(SIMD_AVX512BW_DISABLE) && !defined(SIMD_AVX512VNNI_DISABLE)
+#define SIMD_AVX512VNNI_DISABLE
+#endif
+
+#if defined(SIMD_VMX_DISABLE) && !defined(SIMD_VSX_DISABLE)
+#define SIMD_VSX_DISABLE
+#endif
 
 #if defined(_MSC_VER) && defined(_MSC_FULL_VER)
 
 #define SIMD_ALIGNED(x) __declspec(align(x))
+
+#define SIMD_NOINLINE __declspec(noinline)
 
 #ifdef _M_IX86
 #define SIMD_X86_ENABLE
@@ -99,6 +150,10 @@
 #define SIMD_AVX512BW_ENABLE
 #endif
 
+#if !defined(SIMD_AVX512VNNI_DISABLE) && _MSC_VER >= 1924
+#define SIMD_AVX512VNNI_ENABLE
+#endif
+
 #if defined(NDEBUG) && _MSC_VER == 1914
 #define SIMD_MASKZ_LOAD_ERROR
 #endif
@@ -117,11 +172,21 @@
 #define SIMD_CPP_2011_ENABLE
 #endif
 
+#if _MSVC_LANG >= 201402L
+#define SIMD_CPP_2014_ENABLE
+#endif
+
+#if _MSVC_LANG >= 201703L
+#define SIMD_CPP_2017_ENABLE
+#endif
+
 #define SIMD_FUNCTION __FUNCTION__
 
 #elif defined(__GNUC__)
 
 #define SIMD_ALIGNED(x) __attribute__ ((aligned(x)))
+
+#define SIMD_NOINLINE __attribute__ ((noinline))
 
 #ifdef __i386__
 #define SIMD_X86_ENABLE
@@ -197,6 +262,10 @@
 #if !defined(SIMD_AVX512BW_DISABLE) && defined(__AVX512BW__)
 #define SIMD_AVX512BW_ENABLE
 #endif
+
+#if !defined(SIMD_AVX512VNNI_DISABLE) && defined(__AVX512VNNI__)
+#define SIMD_AVX512VNNI_ENABLE
+#endif
 #endif
 
 #endif//defined(SIMD_X86_ENABLE) || defined(SIMD_X64_ENABLE)
@@ -241,6 +310,14 @@
 #define SIMD_CPP_2011_ENABLE
 #endif
 
+#if __cplusplus >= 201402L
+#define SIMD_CPP_2014_ENABLE
+#endif
+
+#if __cplusplus >= 201703L
+#define SIMD_CPP_2017_ENABLE
+#endif
+
 #if defined(__clang__)
 #define SIMD_CLANG_AVX2_BGR_TO_BGRA_ERROR
 #endif
@@ -278,7 +355,7 @@
 #endif
 
 #if defined(SIMD_AVX_ENABLE) || defined(SIMD_AVX2_ENABLE) \
-    || defined(SIMD_AVX512F_ENABLE) || defined(SIMD_AVX512BW_ENABLE) 
+    || defined(SIMD_AVX512F_ENABLE) || defined(SIMD_AVX512BW_ENABLE) || defined(SIMD_AVX512VNNI_ENABLE)
 #include <immintrin.h>
 #endif
 
@@ -300,7 +377,7 @@
 #include <msa.h>
 #endif
 
-#if defined(SIMD_AVX512F_ENABLE) || defined(SIMD_AVX512BW_ENABLE)
+#if defined(SIMD_AVX512F_ENABLE) || defined(SIMD_AVX512BW_ENABLE) || defined(SIMD_AVX512VNNI_ENABLE)
 #define SIMD_ALIGN 64
 #elif defined(SIMD_AVX_ENABLE) || defined(SIMD_AVX2_ENABLE)
 #define SIMD_ALIGN 32
@@ -315,9 +392,9 @@
 #define SIMD_ALIGN 4
 #endif
 
-#if (defined(SIMD_AVX512F_ENABLE) || defined(SIMD_AVX512F_ENABLE))
+#if (defined(SIMD_AVX512F_ENABLE) || defined(SIMD_AVX512BW_ENABLE) || defined(SIMD_AVX512VNNI_ENABLE))
 #ifdef SIMD_X64_ENABLE
-#ifndef _MSC_VER
+#if defined(__GNUC__) || (defined(_MSC_VER) && _MSC_VER >= 1915)
 #define SIMD_ZMM_COUNT 32
 #else
 #define SIMD_ZMM_COUNT 16

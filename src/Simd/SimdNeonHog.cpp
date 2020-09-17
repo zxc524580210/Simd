@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2017 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -535,7 +535,7 @@ namespace Simd
                     _filter[i] = vdupq_n_f32(filter[i]);
 
                 size_t alignedWidth = AlignLo(width, F);
-                float32x4_t tailMask = RightNotZero(width - alignedWidth);
+                float32x4_t tailMask = RightNotZero32f(width - alignedWidth);
 
                 for (size_t row = 0; row < height; ++row)
                 {

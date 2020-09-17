@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar.
+* Copyright (c) 2011-2019 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,7 @@ namespace Simd
         void Fill32f(float * dst, size_t size, const float * value)
         {
             if (value == 0 || value[0] == 0)
-                memset(dst, 0, sizeof(float));
+                memset(dst, 0, size * sizeof(float));
             else
             {
                 float v = value[0];

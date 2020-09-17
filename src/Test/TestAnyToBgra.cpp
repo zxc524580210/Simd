@@ -1,7 +1,7 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -143,6 +143,35 @@ namespace Test
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable && W >= Simd::Neon::A)
             result = result && AnyToBgraAutoTest(View::Gray8, FUNC(Simd::Neon::GrayToBgra), FUNC(SimdGrayToBgra));
+#endif
+
+        return result;
+    }
+
+    bool RgbToBgraAutoTest()
+    {
+        bool result = true;
+
+        result = result && AnyToBgraAutoTest(View::Rgb24, FUNC(Simd::Base::RgbToBgra), FUNC(SimdRgbToBgra));
+
+#ifdef SIMD_SSSE3_ENABLE
+        if (Simd::Ssse3::Enable && W >= Simd::Ssse3::A)
+            result = result && AnyToBgraAutoTest(View::Rgb24, FUNC(Simd::Ssse3::RgbToBgra), FUNC(SimdRgbToBgra));
+#endif 
+
+#if defined(SIMD_AVX2_ENABLE) && !defined(SIMD_CLANG_AVX2_BGR_TO_BGRA_ERROR)
+        if (Simd::Avx2::Enable && W >= Simd::Avx2::A)
+            result = result && AnyToBgraAutoTest(View::Rgb24, FUNC(Simd::Avx2::RgbToBgra), FUNC(SimdRgbToBgra));
+#endif 
+
+#ifdef SIMD_AVX512BW_ENABLE
+        if (Simd::Avx512bw::Enable)
+            result = result && AnyToBgraAutoTest(View::Rgb24, FUNC(Simd::Avx512bw::RgbToBgra), FUNC(SimdRgbToBgra));
+#endif 
+
+#ifdef SIMD_NEON_ENABLE
+        if (Simd::Neon::Enable && W >= Simd::Neon::A)
+            result = result && AnyToBgraAutoTest(View::Rgb24, FUNC(Simd::Neon::RgbToBgra), FUNC(SimdRgbToBgra));
 #endif
 
         return result;

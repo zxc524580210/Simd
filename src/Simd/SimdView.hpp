@@ -1,8 +1,10 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar,
-*               2018-2018 Dmitry Fedorov.
+* Copyright (c) 2011-2019 Yermalayeu Ihar,
+*               2014-2019 Antonenka Mikhail,
+*               2018-2019 Dmitry Fedorov,
+*               2019-2019 Artur Voronkov.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -105,6 +107,8 @@ namespace Simd
             Hsv24,
             /*! A 24-bit (3 8-bit channels) HSL (Hue, Saturation, Lightness) pixel format. */
             Hsl24,
+            /*! A 24-bit (3 8-bit channels) RGB (Red, Green, Blue) pixel format. */
+            Rgb24,
         };
 
         /*!
@@ -233,9 +237,17 @@ namespace Simd
         View * Clone() const;
 
         /*!
+            Gets a copy of current image view using buffer as a storage.
+
+            \param [in] buffer - an external view as a buffer.
+            \return a pointer to the new View structure (not owner). The user must free this pointer after usage.
+        */
+        View * Clone(View & buffer) const;
+
+        /*!
             Creates view which references to other View structure.
 
-            \note This function is not create copy of image view! It only create a reference to the same image.
+            \note This function does not create a copy of image view! It only creates a reference to the same image.
 
             \param [in] view - an original image view.
             \return a reference to itself.
@@ -493,8 +505,8 @@ namespace Simd
             Loads image from file.
             
             Supported formats:
-             - PGM(Portable Gray Map) binary(P5) (the file is loaded as 8-bit gray image).
-             - PPM(Portable Pixel Map) binary(P6) (the file is loaded as 32-bit BGRA image).
+             - PGM(Portable Gray Map) text(P2) or binary(P5) (the file is loaded as 8-bit gray image).
+             - PPM(Portable Pixel Map) text(P3) or binary(P6) (the file is loaded as 32-bit BGRA image).
 
             \note PGM and PPM files with comments are not supported.
 
@@ -514,6 +526,11 @@ namespace Simd
             \return - a result of saving.
         */
         bool Save(const std::string & path) const;
+
+        /*!
+            Clear View structure (reset all fields) and free memory if it's owner.
+         */
+        void Clear();
 
     private:
         bool _owner;
@@ -570,6 +587,21 @@ namespace Simd
         \return - a result of checking.
     */
     template <template<class> class A> bool EqualSize(const View<A> & a, const View<A> & b, const View<A> & c);
+
+
+    /*! @ingroup cpp_view_functions
+
+        \fn template <template<class> class A> bool EqualSize(const View<A> & a, const View<A> & b, const View<A> & c, const View<A> & d);
+
+        Checks four image views on the same size.
+
+        \param [in] a - a first image.
+        \param [in] b - a second image.
+        \param [in] c - a third image.
+        \param [in] d - a fourth image.
+        \return - a result of checking.
+    */
+    template <template<class> class A> bool EqualSize(const View<A> & a, const View<A> & b, const View<A> & c, const View<A> & d);
 
     /*! @ingroup cpp_view_functions
 
@@ -810,6 +842,18 @@ namespace Simd
         return view;
     }
 
+    template <template<class> class A> SIMD_INLINE View<A> * View<A>::Clone(View & buffer) const
+    {
+        if (buffer.width < width || buffer.height < height)
+            buffer.Recreate(width, height, format);
+
+        View<A> * view = new View<A>(width, height, format, buffer.data);
+        size_t size = width*PixelSize();
+        for (size_t row = 0; row < height; ++row)
+            memcpy(view->data + view->stride*row, data + stride*row, size);
+        return view;
+    }
+
     /*! \cond */
     template <template<class> class A> SIMD_INLINE View<A> & View<A>::operator = (const View<A> & view)
     {
@@ -1000,6 +1044,7 @@ namespace Simd
         case BayerBggr: return 1;
         case Hsv24:     return 3;
         case Hsl24:     return 3;
+        case Rgb24:     return 3;
         default: assert(0); return 0;
         }
     }
@@ -1029,6 +1074,7 @@ namespace Simd
         case BayerBggr: return 1;
         case Hsv24:     return 1;
         case Hsl24:     return 1;
+        case Rgb24:     return 1;
         default: assert(0); return 0;
         }
     }
@@ -1058,6 +1104,7 @@ namespace Simd
         case BayerBggr: return 1;
         case Hsv24:     return 3;
         case Hsl24:     return 3;
+        case Rgb24:     return 3;
         default: assert(0); return 0;
         }
     }
@@ -1118,7 +1165,7 @@ namespace Simd
         {
             std::string type;
             ifs >> type;
-            if (type == "P5")
+            if (type == "P2" || type == "P5")
             {
                 size_t w, h, d;
                 ifs >> w >> h >> d;
@@ -1126,11 +1173,26 @@ namespace Simd
                     return false;
                 ifs.get();
                 Recreate(w, h, View<A>::Gray8);
-                for (size_t row = 0; row < height; ++row)
-                    ifs.read((char*)(data + row*stride), width);
+                if (type == "P2")
+                {
+                    for (size_t row = 0; row < height; ++row)
+                    {
+                        for (size_t col = 0; col < width; ++col)
+                        {
+                            int gray;
+                            ifs >> gray;
+                            data[row * stride + col] = (uint8_t)gray;
+                        }
+                    }
+                }
+                else
+                {
+                    for (size_t row = 0; row < height; ++row)
+                        ifs.read((char*)(data + row*stride), width);
+                }
                 return true;
             }
-            if (type == "P6")
+            if (type == "P3" || type == "P6")
             {
                 size_t w, h, d;
                 ifs >> w >> h >> d;
@@ -1138,18 +1200,37 @@ namespace Simd
                     return false;
                 ifs.get();
                 Recreate(w, h, View<A>::Bgra32);
-                View buffer(width, 1, Bgr24);
-                for (size_t row = 0; row < height; ++row)
+                if (type == "P3")
                 {
-                    ifs.read((char*)buffer.data, width*3);
-                    const uint8_t * rgb = buffer.data;
-                    uint8_t * bgra = data + row*stride;
-                    for (size_t col = 0; col < width; ++col, rgb += 3, bgra += 4)
+                    for (size_t row = 0; row < height; ++row)
                     {
-                        bgra[0] = rgb[2];
-                        bgra[1] = rgb[1];
-                        bgra[2] = rgb[0];
-                        bgra[3] = 0xFF;
+                        uint8_t * bgra = data + row * stride;
+                        for (size_t col = 0; col < width; ++col, bgra += 4)
+                        {
+                            int blue, green, red;
+                            ifs >> red >> green >> blue;
+                            bgra[0] = (uint8_t)blue;
+                            bgra[1] = (uint8_t)green;
+                            bgra[2] = (uint8_t)red;
+                            bgra[3] = 0xFF;
+                        }
+                    }
+                }
+                else
+                {
+                    View buffer(width, 1, Bgr24);
+                    for (size_t row = 0; row < height; ++row)
+                    {
+                        ifs.read((char*)buffer.data, width*3);
+                        const uint8_t * rgb = buffer.data;
+                        uint8_t * bgra = data + row*stride;
+                        for (size_t col = 0; col < width; ++col, rgb += 3, bgra += 4)
+                        {
+                            bgra[0] = rgb[2];
+                            bgra[1] = rgb[1];
+                            bgra[2] = rgb[0];
+                            bgra[3] = 0xFF;
+                        }
                     }
                 }
                 return true;
@@ -1212,6 +1293,18 @@ namespace Simd
             return false;
     }
 
+    template <template<class> class A> SIMD_INLINE void View<A>::Clear()
+    {
+        if (_owner && data)
+            Allocator::Free(data);
+        *(void**)&data = nullptr;
+        _owner = false;
+        *(size_t*)&width = 0;
+        *(size_t*)&height = 0;
+        *(ptrdiff_t *)&stride = 0;
+        *(Format*)&format = Format::None;
+    }
+
     // View utilities implementation:
 
     template <template<class> class A, class T> const T & At(const View<A> & view, size_t x, size_t y)
@@ -1239,6 +1332,14 @@ namespace Simd
         return
             (a.width == b.width && a.height == b.height) &&
             (a.width == c.width && a.height == c.height);
+    }
+
+    template <template<class> class A> SIMD_INLINE bool EqualSize(const View<A> & a, const View<A> & b, const View<A> & c, const View<A> & d)
+    {
+        return
+            (a.width == b.width && a.height == b.height) &&
+            (a.width == c.width && a.height == c.height) &&
+            (a.width == d.width && a.height == d.height);
     }
 
     template <template<class> class A, template<class> class B> SIMD_INLINE bool Compatible(const View<A> & a, const View<B> & b)

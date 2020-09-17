@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2017 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -461,7 +461,7 @@ namespace Simd
         {
             __m256i lo = Anchor<align>(src, stride, threshold);
             __m256i hi = Anchor<align>(src + HA, stride, threshold);
-            Store<align>((__m256i*)dst, PackU16ToU8(lo, hi));
+            Store<align>((__m256i*)dst, PackI16ToU8(lo, hi));
         }
 
         template <bool align> void ContourAnchors(const int16_t * src, size_t srcStride, size_t width, size_t height,

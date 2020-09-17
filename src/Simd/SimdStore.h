@@ -1,7 +1,7 @@
 /*
 * Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2019 Yermalayeu Ihar.
+* Copyright (c) 2011-2020 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -81,6 +81,11 @@ namespace Simd
         template <> SIMD_INLINE void Store<true>(__m128i * p, __m128i a)
         {
             _mm_store_si128(p, a);
+        }
+
+        template <int part> SIMD_INLINE void StoreHalf(__m128i* p, __m128i a)
+        {
+            Sse::StoreHalf<part>((float*)p, _mm_castsi128_ps(a));
         }
 
         template <bool align> SIMD_INLINE void StoreMasked(__m128i * p, __m128i value, __m128i mask)
@@ -175,7 +180,7 @@ namespace Simd
             return _mm256_permute4x64_epi64(_mm256_packs_epi16(lo, hi), 0xD8);
         }
 
-        SIMD_INLINE __m256i PackU16ToU8(__m256i lo, __m256i hi)
+        SIMD_INLINE __m256i PackI16ToU8(__m256i lo, __m256i hi)
         {
             return _mm256_permute4x64_epi64(_mm256_packus_epi16(lo, hi), 0xD8);
         }
@@ -195,6 +200,12 @@ namespace Simd
             __m256i _lo = lo;
             lo = _mm256_permute2x128_si256(lo, hi, 0x20);
             hi = _mm256_permute2x128_si256(_lo, hi, 0x31);
+        }
+
+        template <bool align> SIMD_INLINE void Store24(uint8_t * p, __m256i a)
+        {
+            Sse2::Store<align>((__m128i*)p, _mm256_extractf128_si256(a, 0));
+            Sse2::StoreHalf<0>((__m128i*)p + 1, _mm256_extractf128_si256(a, 1));
         }
     }
 #endif//SIMD_SAVX2_ENABLE
@@ -227,6 +238,20 @@ namespace Simd
         template <> SIMD_INLINE void Store<true, true>(float * p, __m512 a, __mmask16 m)
         {
             return _mm512_mask_store_ps(p, m, a);
+        }
+
+        template <bool align> SIMD_INLINE void Store(float * p0, float * p1, __m512 a)
+        {
+            Avx::Store<align>(p0, _mm256_castpd_ps(_mm512_extractf64x4_pd(_mm512_castps_pd(a), 0)));
+            Avx::Store<align>(p1, _mm256_castpd_ps(_mm512_extractf64x4_pd(_mm512_castps_pd(a), 1)));
+        }
+
+        template <bool align> SIMD_INLINE void Store(float * p0, float * p1, float * p2, float * p3, __m512 a)
+        {
+            Sse::Store<align>(p0, _mm512_extractf32x4_ps(a, 0));
+            Sse::Store<align>(p1, _mm512_extractf32x4_ps(a, 1));
+            Sse::Store<align>(p2, _mm512_extractf32x4_ps(a, 2));
+            Sse::Store<align>(p3, _mm512_extractf32x4_ps(a, 3));
         }
     }
 #endif//SIMD_AVX512F_ENABLE
@@ -294,6 +319,41 @@ namespace Simd
         template <> SIMD_INLINE void Store<true, true>(uint32_t * p, __m512i a, __mmask16 m)
         {
             return _mm512_mask_storeu_epi32(p, m, a);
+        }
+
+        template <bool align, bool mask> SIMD_INLINE void Store(int32_t * p, __m512i a, __mmask16 m)
+        {
+            return Store<align, mask>((uint32_t*)p, a, m);
+        }
+
+        template <bool align, bool mask> SIMD_INLINE void Store(uint8_t* p, __m256i a, __mmask32 m)
+        {
+            return Avx2::Store<align>((__m256i*)p, a);
+        }
+
+        template <> SIMD_INLINE void Store<false, true>(uint8_t* p, __m256i a, __mmask32 m)
+        {
+            return _mm256_mask_storeu_epi8(p, m, a);
+        }
+
+        template <> SIMD_INLINE void Store<true, true>(uint8_t* p, __m256i a, __mmask32 m)
+        {
+            return _mm256_mask_storeu_epi8(p, m, a);
+        }
+
+        template <bool align, bool mask> SIMD_INLINE void Store(uint8_t* p, __m128i a, __mmask16 m)
+        {
+            return Sse2::Store<align>((__m128i*)p, a);
+        }
+
+        template <> SIMD_INLINE void Store<false, true>(uint8_t* p, __m128i a, __mmask16 m)
+        {
+            return _mm_mask_storeu_epi8(p, m, a);
+        }
+
+        template <> SIMD_INLINE void Store<true, true>(uint8_t* p, __m128i a, __mmask16 m)
+        {
+            return _mm_mask_storeu_epi8(p, m, a);
         }
     }
 #endif//SIMD_AVX512BW_ENABLE

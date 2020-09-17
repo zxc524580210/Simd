@@ -1,7 +1,7 @@
 /*
 * Tests for Simd Library (http://ermig1979.github.io/Simd).
 *
-* Copyright (c) 2011-2018 Yermalayeu Ihar.
+* Copyright (c) 2011-2019 Yermalayeu Ihar.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -224,6 +224,116 @@ namespace Test
 #ifdef SIMD_NEON_ENABLE
         if (Simd::Neon::Enable)
             result = result && GetMomentsAutoTest(FUNC_M(Simd::Neon::GetMoments), FUNC_M(SimdGetMoments));
+#endif
+
+        return result;
+    }
+
+    namespace
+    {
+        struct FuncGOM
+        {
+            typedef void(*FuncPtr)(const uint8_t* src, size_t srcStride, size_t width, size_t height, const uint8_t* mask, size_t maskStride, uint8_t index,
+                uint64_t* n, uint64_t* s, uint64_t* sx, uint64_t* sy, uint64_t* sxx, uint64_t* sxy, uint64_t* syy);
+
+            FuncPtr func;
+            String desc;
+
+            FuncGOM(const FuncPtr& f, const String & d) : func(f), desc(d) {}
+
+            void Update(int use)
+            {
+                desc = desc + "[" + ((use & 1) ? "1" : "0") + "-" + ((use & 2) ? "1" : "0") + "]";
+            }
+
+            void Call(const View & src, const View & mask, uint8_t index, uint64_t * n, uint64_t* s, uint64_t* sx, uint64_t* sy, uint64_t* sxx, uint64_t* sxy, uint64_t* syy) const
+            {
+                TEST_PERFORMANCE_TEST(desc);
+                func(src.data, src.stride, src.format ? src.width : mask.width, src.format ? src.height : mask.height, mask.data, mask.stride, index, n, s, sx, sy, sxx, sxy, syy);
+            }
+        };
+    }
+
+#define FUNC_GOM(function) FuncGOM(function, #function)
+
+    bool GetObjectMomentsAutoTest(int width, int height, int use, FuncGOM f1, FuncGOM f2)
+    {
+        bool result = true;
+
+        f1.Update(use);
+        f2.Update(use);
+
+        TEST_LOG_SS(Info, "Test " << f1.desc << " & " << f2.desc << " [" << width << ", " << height << "].");
+
+        View src, mask;
+        if (use & 1)
+        {
+            src.Recreate(width, height, View::Gray8);
+            FillRandom(src);
+        }
+        const uint8_t index = 7;
+        if (use & 2)
+        {
+            mask.Recreate(width, height, View::Gray8);
+            FillRandomMask(mask, index);
+        }
+        uint64_t n1, s1, sx1, sy1, sxx1, sxy1, syy1;
+        uint64_t n2, s2, sx2, sy2, sxx2, sxy2, syy2;
+
+        TEST_ALIGN(SIMD_ALIGN);
+
+        TEST_EXECUTE_AT_LEAST_MIN_TIME(f1.Call(src, mask, index, &n1, &s1, &sx1, &sy1, &sxx1, &sxy1, &syy1));
+
+        TEST_EXECUTE_AT_LEAST_MIN_TIME(f2.Call(src, mask, index, &n2, &s2, &sx2, &sy2, &sxx2, &sxy2, &syy2));
+
+        TEST_CHECK_VALUE(n);
+        TEST_CHECK_VALUE(s);
+        TEST_CHECK_VALUE(sx);
+        TEST_CHECK_VALUE(sy);
+        TEST_CHECK_VALUE(sxx);
+        TEST_CHECK_VALUE(sxy);
+        TEST_CHECK_VALUE(syy);
+
+        return result;
+    }
+
+    bool GetObjectMomentsAutoTest(const FuncGOM & f1, const FuncGOM & f2)
+    {
+        bool result = true;
+        
+        for (int use = 1; use <= 3; ++use)
+        {
+            result = result && GetObjectMomentsAutoTest(W, H, use, f1, f2);
+            result = result && GetObjectMomentsAutoTest(W + O, H - O, use, f1, f2);
+        }
+
+        return result;
+    }
+
+    bool GetObjectMomentsAutoTest()
+    {
+        bool result = true;
+
+        result = result && GetObjectMomentsAutoTest(FUNC_GOM(Simd::Base::GetObjectMoments), FUNC_GOM(SimdGetObjectMoments));
+
+#ifdef SIMD_SSE2_ENABLE
+        if (Simd::Sse2::Enable)
+            result = result && GetObjectMomentsAutoTest(FUNC_GOM(Simd::Sse2::GetObjectMoments), FUNC_GOM(SimdGetObjectMoments));
+#endif 
+
+#ifdef SIMD_AVX2_ENABLE
+        if (Simd::Avx2::Enable)
+            result = result && GetObjectMomentsAutoTest(FUNC_GOM(Simd::Avx2::GetObjectMoments), FUNC_GOM(SimdGetObjectMoments));
+#endif 
+
+#ifdef SIMD_AVX512BW_ENABLE
+        if (Simd::Avx512bw::Enable)
+            result = result && GetObjectMomentsAutoTest(FUNC_GOM(Simd::Avx512bw::GetObjectMoments), FUNC_GOM(SimdGetObjectMoments));
+#endif 
+
+#ifdef SIMD_NEON_ENABLE
+        if (Simd::Neon::Enable)
+            result = result && GetObjectMomentsAutoTest(FUNC_GOM(Simd::Neon::GetObjectMoments), FUNC_GOM(SimdGetObjectMoments));
 #endif
 
         return result;
